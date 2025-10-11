@@ -10,7 +10,7 @@ namespace Game_Shop_AI_Assistent.Controllers
     /// Контроллер для управления покупками в магазине
     /// </summary>
     /// <remarks>
-    /// Этот контроллер предоставляет API для работы с покупками:
+    /// Этот контроллер предоставляет API для работы с покупкамi:
     /// покупка игр, получение истории покупок и т.д.
     /// </remarks>
     public class PurchasesController : Controller
