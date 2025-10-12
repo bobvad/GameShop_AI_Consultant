@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
-
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
@@ -12,7 +11,7 @@ public class Genre
     /// Уникальный идентификатор жанра
     /// </summary>
     [Key]
-    [Column("genre_id")]
+    [Column("genre_id")]  
     public int Id { get; set; }
 
     /// <summary>

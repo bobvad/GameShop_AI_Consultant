@@ -1,5 +1,4 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
-
 using System.ComponentModel.DataAnnotations;
 
 /// <summary>
@@ -12,7 +11,7 @@ public class GameGenre
     /// Уникальный идентификатор связи
     /// </summary>
     [Key]
-    [Column("id")]
+    [Column("game_genre_id")]
     public int Id { get; set; }
 
     /// <summary>
@@ -30,10 +29,12 @@ public class GameGenre
     /// <summary>
     /// Игра
     /// </summary>
+    [ForeignKey("GameId")]
     public Game Game { get; set; } = null!;
 
     /// <summary>
     /// Жанр
     /// </summary>
+    [ForeignKey("GenreId")]
     public Genre Genre { get; set; } = null!;
 }

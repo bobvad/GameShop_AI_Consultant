@@ -191,7 +191,7 @@ namespace Game_Shop_AI_Assistent.Controllers
         [Route("DeleteByAll")]
         [ProducesResponseType(200)]
         [ProducesResponseType(500)]
-        public ActionResult DeleteByAll(int id)
+        public ActionResult DeleteByAll()
         {
             try
             {

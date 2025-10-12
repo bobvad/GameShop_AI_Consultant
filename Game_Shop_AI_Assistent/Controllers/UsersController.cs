@@ -18,7 +18,6 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// Авторизация пользователя
         /// </summary> 
         /// <param name="Login">Логин пользователя</param>
-        ///<param name="Email">Почта пользователя</param>
         /// <param name="Password">Пароль пользователя</param>
         /// <remarks>Данный метод получает список задач, по предоставленной данные</remarks>
         ///<response code="200">Пользователя успешно авторизован</response>
@@ -31,7 +30,7 @@ namespace Game_Shop_AI_Assistent.Controllers
         [ProducesResponseType(500)]
         public ActionResult SingIn([FromForm] string Login, [FromForm] string Password)
         {
-            if (Login == null&& Password == null)
+            if (Login == null && Password == null)
                 return StatusCode(403);
             try
             {
@@ -41,6 +40,41 @@ namespace Game_Shop_AI_Assistent.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500);
+            }
+        }
+        /// <summary>
+        /// Обновить данные пользователя
+        /// </summary>
+        [Route("UpdateUser")]
+        [HttpPut]
+        [ProducesResponseType(typeof(Users), 200)]
+        [ProducesResponseType(404)]
+        [ProducesResponseType(409)]
+        public ActionResult UpdateUser([FromForm] int userId, [FromForm] string login, [FromForm] string email)
+        {
+            try
+            {
+                var context = new GameShopContext();
+                var user = context.Users.FirstOrDefault(x => x.Id == userId);
+
+                if (user == null)
+                    return NotFound("Пользователь не найден");
+
+                if (context.Users.Any(u => u.Login == login && u.Id != userId))
+                    return Conflict("Пользователь с таким логином уже существует");
+
+                if (context.Users.Any(u => u.Email == email && u.Id != userId))
+                    return Conflict("Пользователь с таким email уже существует");
+
+                user.Login = login.Trim();
+                user.Email = email.Trim();
+
+                context.SaveChanges();
+                return Json(user);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Ошибка при обновлении данных");
             }
         }
         /// <summary>
@@ -71,12 +105,12 @@ namespace Game_Shop_AI_Assistent.Controllers
 
                     Users user = new Users()
                     {
-                        Login = Login,
-                        Email = Email,
-                        Password = Password,
-                        DateTimeCreated = DateTimeCreated
+                       Login = Login.Trim(), 
+                       Email = Email.Trim(),
+                       Password = Password,
+                       DateTimeCreated = DateTime.UtcNow,
+                       IsGuest = false
                     };
-
                     context.Users.Add(user);
                     context.SaveChanges();
                     return Json(user);

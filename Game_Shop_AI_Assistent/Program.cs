@@ -5,7 +5,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddControllers(); 
+builder.Services.AddControllers();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
 
 builder.Services.AddSwaggerGen(c =>
 {
@@ -66,9 +75,11 @@ app.UseStaticFiles();
 
 app.UseRouting();
 
+app.UseCors("AllowAll");
+
 app.UseAuthorization();
 
 app.MapRazorPages();
-app.MapControllers(); 
+app.MapControllers();
 
 app.Run();
