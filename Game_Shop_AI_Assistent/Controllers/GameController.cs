@@ -1,5 +1,6 @@
 ﻿using GameShop.Context;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
@@ -152,13 +153,6 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, "Произошла ошибка при изменении данных об игре");
             }
         }
-        /// <summary>
-        /// Метод удаления задачи
-        /// </summary> 
-        /// <param name="Id">Код задачи</param>
-        /// <remarks>Данный метод удаляет задачу в базе данных</remarks>
-        ///<response code="200">Задача успешно удалена</response>
-        ///<response code="500">При выполнении запроса возникли ошибки</response>
         [ApiExplorerSettings(GroupName = "v4")]
         [HttpDelete]
         [Route("DeleteById")]
@@ -168,15 +162,28 @@ namespace Game_Shop_AI_Assistent.Controllers
         {
             try
             {
-                GameShopContext context = new GameShopContext();
-                Game task = context.Games.Where(x => x.Id == id).First();
-                context.Games.Remove(task);
+                using var context = new GameShopContext();
+                var game = context.Games
+                    .Include(g => g.GameGenres)
+                    .Include(g => g.Purchases)
+                    .Include(g => g.Reviews)
+                    .FirstOrDefault(x => x.Id == id);
+
+                if (game == null)
+                    return NotFound("Игра не найдена");
+
+                context.GameGenres.RemoveRange(game.GameGenres);
+                context.Purchases.RemoveRange(game.Purchases);
+                context.Reviews.RemoveRange(game.Reviews);
+
+                context.Games.Remove(game);
                 context.SaveChanges();
-                return StatusCode(200);
+
+                return Ok("Игра успешно удалена");
             }
             catch (Exception ex)
             {
-                return StatusCode(500);
+                return StatusCode(500, $"Ошибка при удалении: {ex.Message}");
             }
         }
         /// <summary>

@@ -121,5 +121,36 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, "Произошла ошибка при регистрации пользователя");
             }
         }
+        [Route("DeleteById")]
+        [HttpDelete] // Изменяем на HttpDelete, так как это операция удаления
+        [ProducesResponseType(200)]
+        [ProducesResponseType(400)]
+        [ProducesResponseType(404)]
+        [ProducesResponseType(500)]
+        public ActionResult DeleteById([FromForm] int id) // Добавляем параметр id
+        {
+            try
+            {
+                using var context = new GameShopContext(); // Используем using для правильного управления ресурсами
+
+                // Ищем пользователя по ID
+                var user = context.Users.Where(x => x.Id == id).First();
+
+                if (user == null)
+                {
+                    return NotFound($"Пользователь с ID {id} не найден");
+                }
+
+                context.Users.Remove(user);
+                context.SaveChanges();
+
+                return Ok($"Пользователь с ID {id} успешно удален");
+            }
+            catch (Exception ex)
+            {
+               
+                return StatusCode(500, "Произошла ошибка при удалении пользователя");
+            }
+        }
     }
 }

@@ -14,7 +14,7 @@ namespace GameShop.Context
         public DbSet<Review> Reviews { get; set; }
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<Message> Messages { get; set; }
-
+        public DbSet<Cart> Carts { get; set; }
         public GameShopContext()
         {
         }
@@ -32,6 +32,18 @@ namespace GameShop.Context
             modelBuilder.Entity<Purchase>().ToTable("purchases");
             modelBuilder.Entity<Review>().ToTable("reviews");
             modelBuilder.Entity<Message>().ToTable("messages");
+            modelBuilder.Entity<Cart>().ToTable("cart"); 
+
+            modelBuilder.Entity<Cart>(entity =>
+            {
+                entity.HasKey(e => e.Id);
+                entity.Property(e => e.Id)
+                      .ValueGeneratedOnAdd()
+                      .HasColumnName("cart_id");
+
+                entity.HasIndex(e => new { e.UserId, e.GameId })
+                      .IsUnique();
+            });
 
             base.OnModelCreating(modelBuilder);
         }

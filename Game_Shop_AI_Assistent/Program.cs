@@ -3,9 +3,15 @@ using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
-builder.Services.AddRazorPages();
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer(); 
+
+builder.Services.AddHttpClient<IAiService, DeepSeekService>();
+builder.Services.AddScoped<IAiService, DeepSeekService>();
+
+builder.Services.AddLogging();
+
+builder.Services.AddRazorPages();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
