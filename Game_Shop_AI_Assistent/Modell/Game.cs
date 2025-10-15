@@ -19,13 +19,13 @@ public class Game
     /// Название игры
     /// </summary>
     [Column("title")]
-    public string Title { get; set; } = string.Empty;
+    public string? Title { get; set; } = string.Empty;
 
     /// <summary>
     /// Описание игры
     /// </summary>
     [Column("description")]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; } = string.Empty;
 
     /// <summary>
     /// Цена игры

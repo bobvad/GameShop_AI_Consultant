@@ -1,5 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.ComponentModel.DataAnnotations.Schema;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+using System.ComponentModel.DataAnnotations;
 
 /// <summary>
 /// Пользователь системы
@@ -43,6 +44,12 @@ public class Users
     /// </summary>
     [Column("is_guest")]
     public bool IsGuest { get; set; }
+
+    /// <summary>
+    /// Роль пользователя (Admin/User)
+    /// </summary>
+    [Column("role")]
+    public string Role { get; set; } = "User";
 
     /// <summary>
     /// Коллекция покупок пользователя

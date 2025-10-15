@@ -113,38 +113,30 @@ namespace Game_Shop_AI_Assistent.Controllers
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult UpdateGame(
-            [FromForm] int id,
-            [FromForm] string title,
-            [FromForm] string description,
-            [FromForm] decimal price,
-            [FromForm] DateTime releaseDate,
-            [FromForm] string developer,
-            [FromForm] string publisher,
-            [FromForm] string ageRating)
+        public ActionResult UpdateGame([FromBody] Game request)
         {
             try
             {
                 using var context = new GameShopContext();
                 {
-                    var game = context.Games.Where(g => g.Id == id).First();
+                    var game = context.Games.FirstOrDefault(g => g.Id == request.Id);
 
                     if (game != null)
                     {
-                        game.Title = title;
-                        game.Description = description;
-                        game.Price = price;
-                        game.ReleaseDate = releaseDate;
-                        game.Developer = developer;
-                        game.Publisher = publisher;
-                        game.AgeRating = ageRating;
+                        game.Title = request.Title;
+                        game.Description = request.Description;
+                        game.Price = request.Price;
+                        game.ReleaseDate = request.ReleaseDate;
+                        game.Developer = request.Developer;
+                        game.Publisher = request.Publisher;
+                        game.AgeRating = request.AgeRating;
 
                         context.SaveChanges();
                         return Ok(game);
                     }
                     else
                     {
-                        return NotFound("Игра с указанным ID не найдена"); 
+                        return NotFound("Игра с указанным ID не найдена");
                     }
                 }
             }

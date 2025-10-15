@@ -43,41 +43,6 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
         }
         /// <summary>
-        /// Обновить данные пользователя
-        /// </summary>
-        [Route("UpdateUser")]
-        [HttpPut]
-        [ProducesResponseType(typeof(Users), 200)]
-        [ProducesResponseType(404)]
-        [ProducesResponseType(409)]
-        public ActionResult UpdateUser([FromForm] int userId, [FromForm] string login, [FromForm] string email)
-        {
-            try
-            {
-                var context = new GameShopContext();
-                var user = context.Users.FirstOrDefault(x => x.Id == userId);
-
-                if (user == null)
-                    return NotFound("Пользователь не найден");
-
-                if (context.Users.Any(u => u.Login == login && u.Id != userId))
-                    return Conflict("Пользователь с таким логином уже существует");
-
-                if (context.Users.Any(u => u.Email == email && u.Id != userId))
-                    return Conflict("Пользователь с таким email уже существует");
-
-                user.Login = login.Trim();
-                user.Email = email.Trim();
-
-                context.SaveChanges();
-                return Json(user);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "Ошибка при обновлении данных");
-            }
-        }
-        /// <summary>
         /// Регистрация пользователя
         /// </summary> 
         /// <param name="Login">Логин пользователя</param>
@@ -105,11 +70,11 @@ namespace Game_Shop_AI_Assistent.Controllers
 
                     Users user = new Users()
                     {
-                       Login = Login.Trim(), 
-                       Email = Email.Trim(),
-                       Password = Password,
-                       DateTimeCreated = DateTime.UtcNow,
-                       IsGuest = false
+                        Login = Login.Trim(),
+                        Email = Email.Trim(),
+                        Password = Password,
+                        DateTimeCreated = DateTime.UtcNow,
+                        IsGuest = false
                     };
                     context.Users.Add(user);
                     context.SaveChanges();
@@ -122,18 +87,18 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
         }
         [Route("DeleteById")]
-        [HttpDelete] // Изменяем на HttpDelete, так как это операция удаления
+        [ApiExplorerSettings(GroupName = "v4")]
+        [HttpDelete]
         [ProducesResponseType(200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult DeleteById([FromForm] int id) // Добавляем параметр id
+        public ActionResult DeleteById([FromForm] int id)
         {
             try
             {
-                using var context = new GameShopContext(); // Используем using для правильного управления ресурсами
+                using var context = new GameShopContext();
 
-                // Ищем пользователя по ID
                 var user = context.Users.Where(x => x.Id == id).First();
 
                 if (user == null)
@@ -148,8 +113,51 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
             catch (Exception ex)
             {
-               
+
                 return StatusCode(500, "Произошла ошибка при удалении пользователя");
+            }
+        }
+        /// <summary>
+        /// Регистрация администратора
+        /// </summary> 
+        /// <param name="Login">Логин администратора</param>
+        /// <param name="Email">Почта администратора</param>
+        /// <param name="Password">Пароль администратора</param>
+        /// <remarks>Данный метод регистрирует нового администратора в системе</remarks>
+        /// <response code="200">Администратор успешно зарегистрирован</response>
+        /// <response code="409">Администратор с таким логином уже существует</response>
+        /// <response code="500">При выполнении запроса на стороне сервера возникли ошибки</response>
+        [Route("RegInAdmin")]
+        [HttpPost]
+        [ProducesResponseType(typeof(Users), 200)]
+        [ProducesResponseType(409)]
+        [ProducesResponseType(500)]
+        public ActionResult RegInAdmin([FromForm] string Login, [FromForm] string Email, [FromForm] string Password)
+        {
+            try
+            {
+                using var context = new GameShopContext();
+
+                if (context.Users.Any(u => u.Login == Login))
+                    return StatusCode(409, "Администратор с таким логином уже существует");
+
+                Users user = new Users()
+                {
+                    Login = Login.Trim(),
+                    Email = Email.Trim(),
+                    Password = Password,
+                    Role = "Admin",
+                    DateTimeCreated = DateTime.UtcNow,
+                    IsGuest = false
+                };
+
+                context.Users.Add(user);
+                context.SaveChanges();
+                return Json(user);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, "Произошла ошибка при регистрации администратора");
             }
         }
     }
