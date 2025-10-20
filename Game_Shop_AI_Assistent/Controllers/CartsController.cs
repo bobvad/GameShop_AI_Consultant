@@ -240,25 +240,5 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, $"Ошибка при получении количества товаров в корзине: {ex.Message}");
             }
         }
-        [HttpGet("TestConnection")]
-        [ApiExplorerSettings(GroupName = "v1")]
-        public ActionResult TestConnection()
-        {
-            try
-            {
-                using var context = new GameShopContext();
-                var cartCount = context.Carts.Count();
-                return Ok(new
-                {
-                    message = "Соединение с БД установлено",
-                    cartItemsCount = cartCount,
-                    database = "Game_ShopDB"
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Ошибка соединения с БД: {ex.Message}");
-            }
-        }
     }
 }

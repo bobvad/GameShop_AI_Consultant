@@ -15,22 +15,34 @@ namespace Game_Shop_AI_Assistent.Controllers
     public class GameGenreController : Controller
     {
         /// <summary>
-        /// Получение всех связей между играми и жанрами
-        /// </summary> 
-        /// <remarks>Данный метод получает все связи между играми и жанрами</remarks>
-        /// <response code="200">Связи успешно получены</response>
-        /// <response code="500">При выполнении запроса возникли ошибки</response>
-        [Route("GetAllGameGenres")]
+        /// Получение всех игр с жанрами
+        /// </summary>
+        [Route("GetAllGamesWithGenres")]
         [HttpGet]
-        [ProducesResponseType(typeof(List<GameGenre>), 200)]
-        [ProducesResponseType(500)]
-        public ActionResult GetAllGameGenres()
+        public ActionResult GetAllGamesWithGenres()
         {
             try
             {
                 var context = new GameShopContext();
-                var gameGenres = context.GameGenres.ToList();
-                return Json(gameGenres);
+
+                var gamesWithGenres = context.Games
+                    .Include(g => g.GameGenres)
+                    .ThenInclude(gg => gg.Genre)
+                    .Select(game => new
+                    {
+                        id = game.Id, 
+                        title = game.Title,
+                        description = game.Description,
+                        price = game.Price,
+                        releaseDate = game.ReleaseDate,
+                        developer = game.Developer,
+                        publisher = game.Publisher,
+                        ageRating = game.AgeRating,
+                        genres = game.GameGenres.Select(gg => gg.Genre.GenreName).ToList()
+                    })
+                    .ToList();
+
+                return Json(gamesWithGenres);
             }
             catch (Exception ex)
             {

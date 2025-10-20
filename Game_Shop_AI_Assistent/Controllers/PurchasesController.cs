@@ -1,5 +1,6 @@
 ﻿using GameShop.Context;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
@@ -16,35 +17,13 @@ namespace Game_Shop_AI_Assistent.Controllers
     public class PurchasesController : Controller
     {
         /// <summary>
-        /// Получить все покупки из базы данных
-        /// </summary>
-        /// <returns>Список всех покупок</returns>
-        [ApiExplorerSettings(GroupName = "v1")]
-        [HttpGet("GetAllPurchase")]
-        [ProducesResponseType(typeof(List<Purchase>), 200)]
-        [ProducesResponseType(500)]
-        public ActionResult GetAllPurchase()
-        {
-            try
-            {
-                using var context = new GameShopContext();
-                List<Purchase> purchases = context.Purchases.ToList();
-                return Ok(purchases);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "Ошибка при получении списка покупок");
-            }
-        }
-
-        /// <summary>
-        /// Получить покупки конкретного пользователя
+        /// Получить покупки конкретного пользователя с названиями игр
         /// </summary>
         /// <param name="userId">ID пользователя</param>
-        /// <returns>Список покупок пользователя</returns>
+        /// <returns>Список покупок пользователя с названиями игр</returns>
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetUserPurchases/{userId}")]
-        [ProducesResponseType(typeof(List<Purchase>), 200)]
+        [ProducesResponseType(200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
         public ActionResult GetUserPurchases(int userId)
@@ -52,11 +31,23 @@ namespace Game_Shop_AI_Assistent.Controllers
             try
             {
                 using var context = new GameShopContext();
-                List<Purchase> purchases = context.Purchases
+
+                var purchases = context.Purchases
                     .Where(p => p.UserId == userId)
+                    .Include(p => p.Game)
+                    .Select(p => new  
+                    {
+                        p.Id,
+                        p.UserId,
+                        p.GameId,
+                        GameName = p.Game.Title,        
+                        p.PurchaseDate,
+                        p.ActivationKey,
+                        p.KeyStatus
+                    })
                     .ToList();
 
-                if (purchases.Count == 0)
+                if (purchases.Count == null)
                     return NotFound("Покупки не найдены");
 
                 return Ok(purchases);
@@ -156,7 +147,6 @@ namespace Game_Shop_AI_Assistent.Controllers
                 if (existingPurchase != null)
                     return Conflict("Игра уже куплена этим пользователем");
 
-                // Если ключ не предоставлен, генерируем новый
                 if (string.IsNullOrEmpty(activationKey))
                 {
                     activationKey = GenerateActivationKey();
@@ -184,10 +174,10 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// Получить детальную информацию о покупке
         /// </summary>
         /// <param name="purchaseId">ID покупки</param>
-        /// <returns>Информация о покупке</returns>
+        /// <returns>Информация о покупке с названием игры</returns>
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetPurchase/{purchaseId}")]
-        [ProducesResponseType(typeof(Purchase), 200)]
+        [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
         public ActionResult GetPurchase(int purchaseId)
@@ -195,12 +185,28 @@ namespace Game_Shop_AI_Assistent.Controllers
             try
             {
                 using var context = new GameShopContext();
-                var purchase = context.Purchases.Find(purchaseId);
+                var purchase = context.Purchases
+                    .Where(p => p.Id == purchaseId)
+                    .Select(p => new
+                    {
+                        Purchase = p,
+                        GameTitle = p.Game.Title 
+                    })
+                    .FirstOrDefault();
 
                 if (purchase == null)
                     return NotFound("Покупка не найдена");
 
-                return Ok(purchase);
+                return Ok(new
+                {
+                    Id = purchase.Purchase.Id,
+                    UserId = purchase.Purchase.UserId,
+                    GameId = purchase.Purchase.GameId,
+                    PurchaseDate = purchase.Purchase.PurchaseDate,
+                    ActivationKey = purchase.Purchase.ActivationKey,
+                    KeyStatus = purchase.Purchase.KeyStatus,
+                    GameTitle = purchase.GameTitle 
+                });
             }
             catch (Exception ex)
             {
@@ -238,85 +244,6 @@ namespace Game_Shop_AI_Assistent.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, "Ошибка при получении списка покупок");
-            }
-        }
-
-        /// <summary>
-        /// Активировать ключ игры
-        /// </summary>
-        /// <param name="purchaseId">ID покупки</param>
-        /// <param name="activationKey">Ключ активации</param>
-        /// <response code="200">Ключ успешно активирован</response>
-        /// <response code="400">Неверный ключ или покупка</response>
-        /// <response code="409">Ключ уже использован или отозван</response>
-        /// <response code="500">Ошибка сервера</response>
-        [ApiExplorerSettings(GroupName = "v2")]
-        [HttpPost("ActivateKey")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(409)]
-        [ProducesResponseType(500)]
-        public ActionResult ActivateKey(
-            [FromForm] int purchaseId,
-            [FromForm] string activationKey)
-        {
-            try
-            {
-                using var context = new GameShopContext();
-                var purchase = context.Purchases.Find(purchaseId);
-
-                if (purchase == null)
-                    return BadRequest("Покупка не найдена");
-
-                if (purchase.ActivationKey != activationKey)
-                    return BadRequest("Неверный ключ активации");
-
-                if (purchase.KeyStatus != "active")
-                    return Conflict($"Ключ уже {purchase.KeyStatus}");
-
-                purchase.KeyStatus = "used";
-                context.SaveChanges();
-
-                return Ok("Ключ успешно активирован");
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "Ошибка при активации ключа");
-            }
-        }
-
-        /// <summary>
-        /// Получить ключ активации для покупки
-        /// </summary>
-        /// <param name="purchaseId">ID покупки</param>
-        /// <returns>Ключ активации</returns>
-        [ApiExplorerSettings(GroupName = "v1")]
-        [HttpGet("GetActivationKey/{purchaseId}")]
-        [ProducesResponseType(typeof(string), 200)]
-        [ProducesResponseType(404)]
-        [ProducesResponseType(500)]
-        public ActionResult GetActivationKey(int purchaseId)
-        {
-            try
-            {
-                using var context = new GameShopContext();
-                var purchase = context.Purchases.Find(purchaseId);
-
-                if (purchase == null)
-                    return NotFound("Покупка не найдена");
-
-                if (string.IsNullOrEmpty(purchase.ActivationKey))
-                    return NotFound("Ключ активации не найден");
-
-                return Ok(new
-                {
-                    ActivationKey = purchase.ActivationKey,
-                    KeyStatus = purchase.KeyStatus
-                });
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, "Ошибка при получении ключа активации");
             }
         }
 
@@ -359,6 +286,41 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, "Ошибка при генерации нового ключа");
             }
         }
+        ///// <summary>
+        ///// Удалить все покупки пользователя
+        ///// </summary>
+        ///// <param name="userId">ID пользователя</param>
+        ///// <response code="200">Все покупки пользователя удалены</response>
+        ///// <response code="404">Покупки не найдены</response>
+        ///// <response code="500">Ошибка сервера при удалении</response>
+        //[ApiExplorerSettings(GroupName = "v2")]
+        //[HttpDelete("DeleteAllUserPurchases/{userId}")]
+        //[ProducesResponseType(200)]
+        //[ProducesResponseType(404)]
+        //[ProducesResponseType(500)]
+        //public ActionResult DeleteAllUserPurchases(int userId)
+        //{
+        //    try
+        //    {
+        //        using var context = new GameShopContext();
+
+        //        var userPurchases = context.Purchases
+        //            .Where(p => p.UserId == userId)
+        //            .ToList();
+
+        //        if (userPurchases.Count == 0)
+        //            return NotFound("Покупки не найдены");
+
+        //        context.Purchases.RemoveRange(userPurchases);
+        //        context.SaveChanges();
+
+        //        return Ok($"Все покупки пользователя (всего {userPurchases.Count}) успешно удалены");
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        return StatusCode(500, "Произошла ошибка при удалении покупок пользователя");
+        //    }
+        //}
 
         /// <summary>
         /// Получить покупки по статусу ключа
@@ -396,14 +358,11 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// <returns>Сгенерированный ключ активации</returns>
         private string GenerateActivationKey()
         {
-            Random rnd = new Random();
-            string key = "";
-            for (int i = 0; i < 16; i++)
-            {
-                key += rnd.Next(0, 10);
-            }
+            Random random = new Random();
+            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-            return key;
+            return new string(Enumerable.Repeat(chars, 16)
+                .Select(s => s[random.Next(s.Length)]).ToArray());
         }
     }
 }
