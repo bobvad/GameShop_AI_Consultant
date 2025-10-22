@@ -21,18 +21,6 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// <summary>
         /// Добавление новой игры в магазин
         /// </summary>
-        /// <param name="title">Название игры</param>
-        /// <param name="description">Описание игры</param>
-        /// <param name="price">Цена игры</param>
-        /// <param name="releaseDate">Дата выхода игры</param>
-        /// <param name="developer">Разработчик игры</param>
-        /// <param name="publisher">Издатель игры</param>
-        /// <param name="ageRating">Возрастной рейтинг</param>
-        /// <remarks>Данный метод добавляет новую игру в каталог магазина</remarks>
-        /// <response code="200">Игра успешно добавлена</response>
-        /// <response code="400">Некорректные данные игры</response>
-        /// <response code="409">Игра с таким названием уже существует</response>
-        /// <response code="500">Ошибка сервера при добавлении игры</response>
         [HttpPost("AddGame")]
         [ProducesResponseType(typeof(Game), 200)]
         [ProducesResponseType(400)]
@@ -47,27 +35,36 @@ namespace Game_Shop_AI_Assistent.Controllers
             [FromForm] string publisher,
             [FromForm] string ageRating)
         {
-             try
-             {
-                var context = new GameShopContext();
+            try
+            {
+                using var context = new GameShopContext();
+
+                var existingGame = context.Games.FirstOrDefault(g => g.Title.ToLower() == title.ToLower());
+                if (existingGame != null)
                 {
-                    Game games = new Game();
-                    games.Title = title;
-                    games.Description = description;
-                    games.Price = price;
-                    games.ReleaseDate = releaseDate;
-                    games.Developer = developer;
-                    games.Publisher = publisher;
-                    games.AgeRating = ageRating;
-                    context.Games.Add(games);
-                    context.SaveChanges();
-                    return Json(games);
+                    return StatusCode(409, "Игра с таким названием уже существует");
+                }
+
+                var game = new Game
+                {
+                    Title = title,
+                    Description = description,
+                    Price = price,
+                    ReleaseDate = releaseDate,
+                    Developer = developer,
+                    Publisher = publisher,
+                    AgeRating = ageRating
                 };
-             }
-             catch
-             {
-                return StatusCode(500, "Произошла ошибка при внесении данных об игре");
-             }
+
+                context.Games.Add(game);
+                context.SaveChanges();
+
+                return Ok(game);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Произошла ошибка при добавлении игры: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -94,55 +91,46 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// <summary>
         /// Изменить игру в базе данных
         /// </summary>
-        /// <param name="id">ID игры для изменения</param>
-        /// <param name="title">Новое название игры</param>
-        /// <param name="description">Новое описание игры</param>
-        /// <param name="price">Новая цена игры</param>
-        /// <param name="releaseDate">Новая дата выхода игры</param>
-        /// <param name="developer">Новый разработчик игры</param>
-        /// <param name="publisher">Новый издатель игры</param>
-        /// <param name="ageRating">Новый возрастной рейтинг</param>
-        /// <remarks>Данный метод обновляет информацию об игре в каталоге магазина</remarks>
-        /// <response code="200">Игра успешно изменена</response>
-        /// <response code="400">Некорректные данные игры</response>
-        /// <response code="404">Игра не найдена</response>
-        /// <response code="500">Ошибка сервера при изменении игры</response>
         [ApiExplorerSettings(GroupName = "v3")]
         [HttpPut("UpdateGame")]
         [ProducesResponseType(typeof(Game), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult UpdateGame([FromBody] Game request)
+        public ActionResult UpdateGame([FromForm] int Id, [FromForm] string Title, [FromForm] string Description,
+            [FromForm] decimal Price, [FromForm] DateTime ReleaseDate, [FromForm] string Developer,
+            [FromForm] string Publisher, [FromForm] string AgeRating)
         {
             try
             {
                 using var context = new GameShopContext();
+                var game = context.Games.FirstOrDefault(g => g.Id == Id);
+
+                if (game == null)
                 {
-                    var game = context.Games.FirstOrDefault(g => g.Id == request.Id);
-
-                    if (game != null)
-                    {
-                        game.Title = request.Title;
-                        game.Description = request.Description;
-                        game.Price = request.Price;
-                        game.ReleaseDate = request.ReleaseDate;
-                        game.Developer = request.Developer;
-                        game.Publisher = request.Publisher;
-                        game.AgeRating = request.AgeRating;
-
-                        context.SaveChanges();
-                        return Ok(game);
-                    }
-                    else
-                    {
-                        return NotFound("Игра с указанным ID не найдена");
-                    }
+                    return NotFound("Игра с указанным ID не найдена");
                 }
+
+                var duplicateGame = context.Games.FirstOrDefault(g => g.Title == Title && g.Id != Id);
+                if (duplicateGame != null)
+                {
+                    return Conflict("Игра с таким названием уже существует");
+                }
+
+                game.Title = Title;
+                game.Description = Description;
+                game.Price = Price;
+                game.ReleaseDate = ReleaseDate;
+                game.Developer = Developer;
+                game.Publisher = Publisher;
+                game.AgeRating = AgeRating;
+
+                context.SaveChanges();
+                return Ok(game);
             }
             catch (Exception ex)
             {
-                return StatusCode(500, "Произошла ошибка при изменении данных об игре");
+                return StatusCode(500, $"Произошла ошибка при изменении данных об игре: {ex.Message}");
             }
         }
         [ApiExplorerSettings(GroupName = "v4")]
