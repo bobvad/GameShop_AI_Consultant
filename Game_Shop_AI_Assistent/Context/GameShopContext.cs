@@ -20,7 +20,7 @@ namespace GameShop.Context
         }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseNpgsql("Host=192.168.0.9;Port=5432;Database=Game_ShopDB;Username=vova;Password=123");
+            optionsBuilder.UseNpgsql("Host=192.168.0.8;Port=5432;Database=Game_ShopDB;Username=vova;Password=123");
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
