@@ -1,12 +1,16 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
-using System;
 
 namespace GameShop.Context
 {
     public class GameShopContext : DbContext
     {
+        public GameShopContext(DbContextOptions<GameShopContext> options) : base(options)
+        {
+        }
+        public GameShopContext() : base()
+        {
+        }
+
         public DbSet<Users> Users { get; set; }
         public DbSet<Game> Games { get; set; }
         public DbSet<Genre> Genres { get; set; }
@@ -15,36 +19,27 @@ namespace GameShop.Context
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<Cart> Carts { get; set; }
-        public GameShopContext()
-        {
-        }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseNpgsql("Host=192.168.0.8;Port=5432;Database=Game_ShopDB;Username=vova;Password=123");
+            if (!optionsBuilder.IsConfigured)
+            {
+                optionsBuilder.UseMySql(
+                    "server=127.0.0.1;port=3306;uid=root;pwd=;database=Game_ShopDB;Connection Timeout=30;Pooling=true;",
+                    new MySqlServerVersion(new Version(8, 1, 0)),
+                    mysqlOptions =>
+                    {
+                        mysqlOptions.EnableRetryOnFailure(
+                            maxRetryCount: 5,
+                            maxRetryDelay: TimeSpan.FromSeconds(10),
+                            errorNumbersToAdd: null
+                        );
+                    }
+                );
+            }
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Users>().ToTable("users");
-            modelBuilder.Entity<Game>().ToTable("games");
-            modelBuilder.Entity<Genre>().ToTable("genres");
-            modelBuilder.Entity<GameGenre>().ToTable("game_genres");
-            modelBuilder.Entity<Purchase>().ToTable("purchases");
-            modelBuilder.Entity<Review>().ToTable("reviews");
-            modelBuilder.Entity<Message>().ToTable("messages");
-            modelBuilder.Entity<Cart>().ToTable("cart"); 
-
-            modelBuilder.Entity<Cart>(entity =>
-            {
-                entity.HasKey(e => e.Id);
-                entity.Property(e => e.Id)
-                      .ValueGeneratedOnAdd()
-                      .HasColumnName("cart_id");
-
-                entity.HasIndex(e => new { e.UserId, e.GameId })
-                      .IsUnique();
-            });
-
             base.OnModelCreating(modelBuilder);
         }
     }

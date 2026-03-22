@@ -1,102 +1,164 @@
 ﻿using GameShop.Context;
+using Game_Shop_AI_Assistent.GigaChat_LLM;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
-    [Route("api/MessagesController")]
+    /// <summary>
+    /// Контроллер для отправки сообщений ИИ-боту (GigaChat) через Form
+    /// </summary>
+    [Route("api/[controller]")]
+    [ApiController]
     [ApiExplorerSettings(GroupName = "v1")]
-    public class MessagesController : Controller
+    public class MessagesController : ControllerBase
     {
-        private readonly IAiService _aiService;
         private readonly ILogger<MessagesController> _logger;
+        private readonly GigaChatService _gigaChatService;
+        private readonly GameShopContext _context;
 
-        public MessagesController(IAiService aiService, ILogger<MessagesController> logger)
+        public MessagesController(
+            ILogger<MessagesController> logger,
+            GigaChatService gigaChatService,
+            GameShopContext context)
         {
-            _aiService = aiService;
             _logger = logger;
+            _gigaChatService = gigaChatService;
+            _context = context;
         }
 
         /// <summary>
-        /// Получить все сообщения из базы данных
+        /// Отправить сообщение боту (через Form)
         /// </summary>
-        [ApiExplorerSettings(GroupName = "v1")]
-        [HttpGet("GetAllMessage")]
-        [ProducesResponseType(typeof(List<Message>), 200)]
-        [ProducesResponseType(500)]
-        public IActionResult GetAllMessage()
-        {
-            try
-            {
-                using var context = new GameShopContext();
-                List<Message> messages = context.Messages.ToList();
-                return Json(messages);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Ошибка при получении списка сообщений");
-                return StatusCode(500, "Ошибка при получении списка сообщений");
-            }
-        }
-
-        /// <summary>
-        /// Отправить сообщение ИИ-ассистенту
-        /// </summary>
-        [ApiExplorerSettings(GroupName = "v2")]
-        [HttpPost("SendMessage")]
-        [ProducesResponseType(typeof(Message), 200)]
+        /// <remarks>
+        /// Формат запроса (application/x-www-form-urlencoded):
+        /// 
+        ///     userId=1&amp;messageText=Посоветуй+игры+про+космос&amp;isFromGuest=false
+        /// 
+        /// Или multipart/form-data с теми же полями.
+        /// </remarks>
+        [HttpPost("Send")]
+        [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+        [ProducesResponseType(typeof(BotResponse), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(500)]
-        public async Task<IActionResult> SendMessage([FromBody] Message request)
+        public async Task<IActionResult> Send(
+            [FromForm] int userId,
+            [FromForm] string messageText,
+            [FromForm] bool isFromGuest = true)
         {
+            // 🔍 Валидация входных данных
+            if (string.IsNullOrWhiteSpace(messageText))
+                return BadRequest(new { error = "Поле messageText обязательно" });
+
+            if (userId <= 0 && !isFromGuest)
+                return BadRequest(new { error = "Неверный userId" });
+
             try
             {
-                _logger.LogInformation($"Получено сообщение: {request.MessageText}");
+                _logger.LogInformation($"[Bot] Запрос от userId={userId}: \"{messageText}\"");
 
-                using var context = new GameShopContext();
-
-                var userMessage = new Message
+                // 💾 1. Сохраняем сообщение пользователя
+                var userMsg = new Message
                 {
-                    UserId = request.UserId,
-                    MessageText = request.MessageText,
-                    IsFromGuest = request.IsFromGuest,
+                    UserId = userId,
+                    MessageText = messageText.Trim(),
+                    IsFromGuest = isFromGuest,
+                    IsFromBot = false,
                     MessageDate = DateTime.UtcNow
                 };
+                _context.Messages.Add(userMsg);
+                await _context.SaveChangesAsync();
 
-                context.Messages.Add(userMessage);
-                await context.SaveChangesAsync();
+                // 🤖 2. Получаем ответ от GigaChat
+                string botAnswer = await _gigaChatService.GetGameRecommendation(messageText);
 
-                _logger.LogInformation("Сообщение пользователя сохранено в БД");
-
-                var aiResponseText = await _aiService.GetResponseAsync(request.MessageText);
-
-                _logger.LogInformation($"Получен ответ от ИИ: {aiResponseText}");
-
-                var botMessage = new Message
+                // 💾 3. Сохраняем ответ бота
+                var botMsg = new Message
                 {
-                    UserId = 29,
-                    MessageText = aiResponseText,
-                    IsFromGuest = false,
+                    UserId = userId,
+                    MessageText = botAnswer,
+                    IsFromGuest = isFromGuest,
+                    IsFromBot = true,
                     MessageDate = DateTime.UtcNow
                 };
+                _context.Messages.Add(botMsg);
+                await _context.SaveChangesAsync();
 
-                context.Messages.Add(botMessage);
-                await context.SaveChangesAsync();
-
-                _logger.LogInformation("Ответ ИИ сохранен в БД");
-
-                return Ok(new
+                // 📤 4. Возвращаем ответ клиенту
+                return Ok(new BotResponse
                 {
-                    messageText = botMessage.MessageText,
-                    messageDate = botMessage.MessageDate,
-                    isFromBot = true
+                    Success = true,
+                    Message = botMsg.MessageText,
+                    Timestamp = botMsg.MessageDate,
+                    MessageId = botMsg.Id
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Ошибка при обработке сообщения");
-                return StatusCode(500, $"Ошибка при обработке сообщения: {ex.Message}");
+                _logger.LogError(ex, "[Bot] Ошибка обработки сообщения");
+                return StatusCode(500, new { error = "Ошибка сервера", details = ex.Message });
             }
         }
+
+        /// <summary>
+        /// 📜 Получить последние сообщения пользователя
+        /// </summary>
+        [HttpGet("History")]
+        [ProducesResponseType(typeof(List<Message>), 200)]
+        public async Task<IActionResult> GetHistory([FromQuery] int userId, [FromQuery] int limit = 20)
+        {
+            try
+            {
+                var messages = await _context.Messages
+                    .Where(m => m.UserId == userId)
+                    .OrderByDescending(m => m.MessageDate)
+                    .Take(limit)
+                    .ToListAsync();
+
+                return Ok(messages.OrderBy(m => m.MessageDate));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка загрузки истории");
+                return StatusCode(500, new { error = "Не удалось загрузить историю" });
+            }
+        }
+
+        /// <summary>
+        /// Очистить историю сообщений
+        /// </summary>
+        [HttpDelete("Clear")]
+        [ProducesResponseType(200)]
+        public async Task<IActionResult> Clear([FromQuery] int userId)
+        {
+            try
+            {
+                var msgs = await _context.Messages
+                    .Where(m => m.UserId == userId)
+                    .ToListAsync();
+
+                _context.Messages.RemoveRange(msgs);
+                await _context.SaveChangesAsync();
+
+                return Ok(new { success = true, deleted = msgs.Count });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка очистки истории");
+                return StatusCode(500, new { error = "Не удалось очистить" });
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ответ бота для клиента
+    /// </summary>
+    public class BotResponse
+    {
+        public bool Success { get; set; }
+        public string Message { get; set; } = string.Empty;
+        public DateTime Timestamp { get; set; }
+        public int MessageId { get; set; }
     }
 }

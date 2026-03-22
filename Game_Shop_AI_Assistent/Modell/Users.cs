@@ -5,50 +5,41 @@ using System.ComponentModel.DataAnnotations;
 /// <summary>
 /// Пользователь системы
 /// </summary>
-[Table("users")]
 public class Users
 {
     /// <summary>
     /// Уникальный идентификатор пользователя
     /// </summary>
-    [Key]
-    [Column("user_id")]
     public int Id { get; set; }
 
     /// <summary>
     /// Имя пользователя (логин)
     /// </summary>
-    [Column("user_name")]
     public string Login { get; set; } = string.Empty;
 
     /// <summary>
     /// Электронная почта пользователя
     /// </summary>
-    [Column("email")]
     public string Email { get; set; } = string.Empty;
 
     /// <summary>
     /// Пароль пользователя
     /// </summary>
-    [Column("password")]
     public string Password { get; set; } = string.Empty;
 
     /// <summary>
     /// Дата и время создания аккаунта
     /// </summary>
-    [Column("date_time")]
     public DateTime DateTimeCreated { get; set; }
 
     /// <summary>
     /// Флаг, указывающий является ли пользователь гостем
     /// </summary>
-    [Column("is_guest")]
     public bool IsGuest { get; set; }
 
     /// <summary>
     /// Роль пользователя (Admin/User)
     /// </summary>
-    [Column("role")]
     public string Role { get; set; } = "User";
 
     /// <summary>

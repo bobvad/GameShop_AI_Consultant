@@ -1,17 +1,28 @@
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore; 
+using GameShop.Context;             
+using Game_Shop_AI_Assistent.GigaChat_LLM;
+using Game_Shop_AI_Assistent.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer(); 
+builder.Services.AddDbContext<GameShopContext>(options =>
+    options.UseMySql(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        new MySqlServerVersion(new Version(8, 1, 0)) 
+    )
+);
 
-builder.Services.AddHttpClient<IAiService, DeepSeekService>();
-builder.Services.AddScoped<IAiService, DeepSeekService>();
+builder.Services.AddScoped<GigaChatService>();
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddLogging();
 
 builder.Services.AddRazorPages();
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>

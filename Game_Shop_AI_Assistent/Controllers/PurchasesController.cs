@@ -1,137 +1,169 @@
-﻿using GameShop.Context;
+﻿using System.Text.Json.Serialization;
+using GameShop.Context;
+using Game_Shop_AI_Assistent.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
     [Route("api/PurchasesController")]
     [ApiExplorerSettings(GroupName = "v1")]
     [ApiController]
-    /// <summary>
-    /// Контроллер для управления покупками в магазине
-    /// </summary>
-    /// <remarks>
-    /// Этот контроллер предоставляет API для работы с покупками:
-    /// покупка игр, получение истории покупок, управление ключами активации и т.д.
-    /// </remarks>
     public class PurchasesController : Controller
     {
-        /// <summary>
-        /// Получить покупки конкретного пользователя с названиями игр
-        /// </summary>
-        /// <param name="userId">ID пользователя</param>
-        /// <returns>Список покупок пользователя с названиями игр</returns>
+        private readonly GameShopContext _context;
+        private readonly IEmailService _emailService;
+        private readonly ILogger<PurchasesController> _logger;
+        private readonly IWebHostEnvironment _env;
+
+        public PurchasesController(
+            GameShopContext context,
+            IEmailService emailService,
+            ILogger<PurchasesController> logger,
+            IWebHostEnvironment env)
+        {
+            _context = context;
+            _emailService = emailService;
+            _logger = logger;
+            _env = env;
+        }
+
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetUserPurchases/{userId}")]
         [ProducesResponseType(200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult GetUserPurchases(int userId)
+        public async Task<ActionResult> GetUserPurchases(int userId)
         {
             try
             {
-                using var context = new GameShopContext();
-
-                var purchases = context.Purchases
+                var purchases = await _context.Purchases
                     .Where(p => p.UserId == userId)
                     .Include(p => p.Game)
-                    .Select(p => new  
+                    .Select(p => new
                     {
                         p.Id,
                         p.UserId,
                         p.GameId,
-                        GameName = p.Game.Title,        
+                        GameName = p.Game.Title,
                         p.PurchaseDate,
                         p.ActivationKey,
                         p.KeyStatus
                     })
-                    .ToList();
+                    .ToListAsync();
 
-                if (purchases.Count == null)
+                if (purchases.Count == 0)
                     return NotFound("Покупки не найдены");
 
                 return Ok(purchases);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при получении списка покупок для userId={UserId}", userId);
                 return StatusCode(500, "Ошибка при получении списка покупок");
             }
         }
 
-        /// <summary>
-        /// Купить игру (основной метод для кнопки "Купить")
-        /// </summary>
-        /// <param name="userId">ID пользователя</param>
-        /// <param name="gameId">ID игры</param>
-        /// <remarks>Пользователь нажимает кнопку "Купить" и игра добавляется в его покупки</remarks>
-        /// <response code="200">Игра успешно куплена</response>
-        /// <response code="400">Ошибка в данных</response>
-        /// <response code="409">Игра уже куплена</response>
-        /// <response code="500">Ошибка сервера при покупке</response>
         [ApiExplorerSettings(GroupName = "v2")]
         [HttpPost("BuyGame")]
-        [ProducesResponseType(typeof(Purchase), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(409)]
-        [ProducesResponseType(500)]
-        public ActionResult BuyGame(
-          [FromForm] int userId,
-          [FromForm] int gameId)
+        public async Task<ActionResult> BuyGame(
+            [FromForm] int userId,
+            [FromForm] int gameId)
         {
             try
             {
-                using var context = new GameShopContext();
+                _logger.LogInformation("Покупка: userId={UserId}, gameId={GameId}", userId, gameId);
 
-                var user = context.Users.Find(userId);
+                var user = await _context.Users.FindAsync(userId);
                 if (user == null)
+                {
+                    _logger.LogWarning("Пользователь {UserId} не найден", userId);
                     return BadRequest("Пользователь не найден");
+                }
+                if (string.IsNullOrWhiteSpace(user.Email))
+                {
+                    _logger.LogWarning("У пользователя {UserId} не указана почта", userId);
+                    return BadRequest("У пользователя не указана почта");
+                }
 
-                var game = context.Games.Find(gameId);
+                var game = await _context.Games.FindAsync(gameId);
                 if (game == null)
+                {
+                    _logger.LogWarning("Игра {GameId} не найдена", gameId);
                     return BadRequest("Игра не найдена");
+                }
 
-                var existingPurchase = context.Purchases
-                    .FirstOrDefault(p => p.UserId == userId && p.GameId == gameId);
+                var existingPurchase = await _context.Purchases
+                    .FirstOrDefaultAsync(p => p.UserId == userId && p.GameId == gameId);
+                if (existingPurchase != null)
+                {
+                    _logger.LogWarning("Игра {GameId} уже куплена пользователем {UserId}", gameId, userId);
+                    return Conflict("Игра уже куплена этим пользователем");
+                }
 
-              
                 string activationKey = GenerateActivationKey();
 
-                Purchase purchase = new Purchase();
-                purchase.UserId = userId;
-                purchase.GameId = gameId;
-                purchase.PurchaseDate = DateTime.UtcNow;
-                purchase.ActivationKey = activationKey; 
-                purchase.KeyStatus = "active";
+                var purchase = new Purchase
+                {
+                    UserId = userId,
+                    GameId = gameId,
+                    PurchaseDate = DateTime.UtcNow,
+                    ActivationKey = activationKey,
+                    KeyStatus = "active"
+                };
 
-                context.Purchases.Add(purchase);
-                context.SaveChanges();
+                _context.Purchases.Add(purchase);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Покупка {PurchaseId} сохранена в БД", purchase.Id);
 
-                return Ok(purchase);
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        _logger.LogInformation("Отправка письма с ключом на {Email}", user.Email);
+                        await _emailService.SendActivationKeyAsync(user.Email, game.Title, activationKey);
+                        _logger.LogInformation("Письмо успешно отправлено");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Ошибка отправки письма на {Email}", user.Email);
+                    }
+                });
+
+                return Ok(new
+                {
+                    purchase.Id,
+                    purchase.UserId,
+                    purchase.GameId,
+                    GameName = game.Title,
+                    purchase.PurchaseDate,
+                    purchase.ActivationKey,
+                    purchase.KeyStatus,
+                    Message = "Покупка успешна! Ключ отправлен на вашу почту."
+                });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Критическая ошибка в BuyGame: userId={UserId}, gameId={GameId}", userId, gameId);
+
+                if (_env.IsDevelopment())
+                {
+                    return StatusCode(500, new
+                    {
+                        error = "Произошла ошибка при покупке игры",
+                        details = ex.Message,
+                        inner = ex.InnerException?.Message
+                    });
+                }
+
                 return StatusCode(500, "Произошла ошибка при покупке игры");
             }
         }
 
-        /// <summary>
-        /// Добавление новой покупки в магазин
-        /// </summary>
-        /// <param name="userId">Покупатель</param>
-        /// <param name="gameId">Какую игру купил</param>
-        /// <param name="purchaseDate">Дата покупки</param>
-        /// <param name="activationKey">Ключ активации (опционально)</param>
-        /// <remarks>Данный метод добавляет покупку</remarks>
-        /// <response code="200">Покупка успешно добавлена</response>
-        /// <response code="400">Некорректные данные покупки</response>
-        /// <response code="500">Ошибка сервера при добавлении покупки</response>
         [ApiExplorerSettings(GroupName = "v2")]
         [HttpPost("AddPurchases")]
-        [ProducesResponseType(typeof(Purchase), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(409)]
-        [ProducesResponseType(500)]
-        public ActionResult AddPurchases(
+        public async Task<ActionResult> AddPurchases(
             [FromForm] int userId,
             [FromForm] int gameId,
             [FromForm] DateTime purchaseDate,
@@ -139,10 +171,8 @@ namespace Game_Shop_AI_Assistent.Controllers
         {
             try
             {
-                using var context = new GameShopContext();
-
-                var existingPurchase = context.Purchases
-                    .FirstOrDefault(p => p.UserId == userId && p.GameId == gameId);
+                var existingPurchase = await _context.Purchases
+                    .FirstOrDefaultAsync(p => p.UserId == userId && p.GameId == gameId);
 
                 if (existingPurchase != null)
                     return Conflict("Игра уже куплена этим пользователем");
@@ -152,47 +182,62 @@ namespace Game_Shop_AI_Assistent.Controllers
                     activationKey = GenerateActivationKey();
                 }
 
-                Purchase purchase = new Purchase();
-                purchase.UserId = userId;
-                purchase.GameId = gameId;
-                purchase.PurchaseDate = purchaseDate;
-                purchase.ActivationKey = activationKey;
-                purchase.KeyStatus = "active";
+                var purchase = new Purchase
+                {
+                    UserId = userId,
+                    GameId = gameId,
+                    PurchaseDate = purchaseDate,
+                    ActivationKey = activationKey,
+                    KeyStatus = "active"
+                };
 
-                context.Purchases.Add(purchase);
-                context.SaveChanges();
+                _context.Purchases.Add(purchase);
+                await _context.SaveChangesAsync();
+
+                var user = await _context.Users.FindAsync(userId);
+                var game = await _context.Games.FindAsync(gameId);
+
+                if (!string.IsNullOrWhiteSpace(user?.Email) && game != null)
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await _emailService.SendActivationKeyAsync(user.Email, game.Title, activationKey);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "Ошибка отправки письма при добавлении покупки");
+                        }
+                    });
+                }
 
                 return Ok(purchase);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при внесении данных о покупке");
                 return StatusCode(500, "Произошла ошибка при внесении данных о покупке");
             }
         }
 
-        /// <summary>
-        /// Получить детальную информацию о покупке
-        /// </summary>
-        /// <param name="purchaseId">ID покупки</param>
-        /// <returns>Информация о покупке с названием игры</returns>
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetPurchase/{purchaseId}")]
         [ProducesResponseType(typeof(object), 200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult GetPurchase(int purchaseId)
+        public async Task<ActionResult> GetPurchase(int purchaseId)
         {
             try
             {
-                using var context = new GameShopContext();
-                var purchase = context.Purchases
+                var purchase = await _context.Purchases
                     .Where(p => p.Id == purchaseId)
                     .Select(p => new
                     {
                         Purchase = p,
-                        GameTitle = p.Game.Title 
+                        GameTitle = p.Game.Title
                     })
-                    .FirstOrDefault();
+                    .FirstOrDefaultAsync();
 
                 if (purchase == null)
                     return NotFound("Покупка не найдена");
@@ -205,36 +250,30 @@ namespace Game_Shop_AI_Assistent.Controllers
                     PurchaseDate = purchase.Purchase.PurchaseDate,
                     ActivationKey = purchase.Purchase.ActivationKey,
                     KeyStatus = purchase.Purchase.KeyStatus,
-                    GameTitle = purchase.GameTitle 
+                    GameTitle = purchase.GameTitle
                 });
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при получении информации о покупке {PurchaseId}", purchaseId);
                 return StatusCode(500, "Ошибка при получении информации о покупке");
             }
         }
 
-        /// <summary>
-        /// Получить последние покупки пользователя
-        /// </summary>
-        /// <param name="userId">ID пользователя</param>
-        /// <param name="count">Количество последних покупок</param>
-        /// <returns>Список последних покупок</returns>
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetRecentPurchases/{userId}")]
         [ProducesResponseType(typeof(List<Purchase>), 200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult GetRecentPurchases(int userId, [FromQuery] int count = 5)
+        public async Task<ActionResult> GetRecentPurchases(int userId, [FromQuery] int count = 5)
         {
             try
             {
-                using var context = new GameShopContext();
-                List<Purchase> purchases = context.Purchases
+                var purchases = await _context.Purchases
                     .Where(p => p.UserId == userId)
                     .OrderByDescending(p => p.PurchaseDate)
                     .Take(count)
-                    .ToList();
+                    .ToListAsync();
 
                 if (purchases.Count == 0)
                     return NotFound("Покупки не найдены");
@@ -243,28 +282,21 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при получении списка покупок для userId={UserId}", userId);
                 return StatusCode(500, "Ошибка при получении списка покупок");
             }
         }
 
-        /// <summary>
-        /// Сгенерировать новый ключ активации для покупки
-        /// </summary>
-        /// <param name="purchaseId">ID покупки</param>
-        /// <response code="200">Новый ключ успешно сгенерирован</response>
-        /// <response code="404">Покупка не найдена</response>
-        /// <response code="500">Ошибка сервера</response>
         [ApiExplorerSettings(GroupName = "v2")]
         [HttpPost("GenerateNewActivationKey/{purchaseId}")]
         [ProducesResponseType(typeof(string), 200)]
         [ProducesResponseType(404)]
         [ProducesResponseType(500)]
-        public ActionResult GenerateNewActivationKey(int purchaseId)
+        public async Task<ActionResult> GenerateNewActivationKey(int purchaseId)
         {
             try
             {
-                using var context = new GameShopContext();
-                var purchase = context.Purchases.Find(purchaseId);
+                var purchase = await _context.Purchases.FindAsync(purchaseId);
 
                 if (purchase == null)
                     return NotFound("Покупка не найдена");
@@ -273,7 +305,7 @@ namespace Game_Shop_AI_Assistent.Controllers
                 purchase.ActivationKey = newActivationKey;
                 purchase.KeyStatus = "active";
 
-                context.SaveChanges();
+                await _context.SaveChangesAsync();
 
                 return Ok(new
                 {
@@ -283,84 +315,68 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при генерации нового ключа для purchaseId={PurchaseId}", purchaseId);
                 return StatusCode(500, "Ошибка при генерации нового ключа");
             }
         }
-        ///// <summary>
-        ///// Удалить все покупки пользователя
-        ///// </summary>
-        ///// <param name="userId">ID пользователя</param>
-        ///// <response code="200">Все покупки пользователя удалены</response>
-        ///// <response code="404">Покупки не найдены</response>
-        ///// <response code="500">Ошибка сервера при удалении</response>
-        //[ApiExplorerSettings(GroupName = "v2")]
-        //[HttpDelete("DeleteAllUserPurchases/{userId}")]
-        //[ProducesResponseType(200)]
-        //[ProducesResponseType(404)]
-        //[ProducesResponseType(500)]
-        //public ActionResult DeleteAllUserPurchases(int userId)
-        //{
-        //    try
-        //    {
-        //        using var context = new GameShopContext();
 
-        //        var userPurchases = context.Purchases
-        //            .Where(p => p.UserId == userId)
-        //            .ToList();
+        [ApiExplorerSettings(GroupName = "v2")]
+        [HttpDelete("DeleteAllUserPurchases/{userId}")]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(404)]
+        [ProducesResponseType(500)]
+        public async Task<ActionResult> DeleteAllUserPurchases(int userId)
+        {
+            try
+            {
+                var userPurchases = await _context.Purchases
+                    .Where(p => p.UserId == userId)
+                    .ToListAsync();
 
-        //        if (userPurchases.Count == 0)
-        //            return NotFound("Покупки не найдены");
+                if (userPurchases.Count == 0)
+                    return NotFound("Покупки не найдены");
 
-        //        context.Purchases.RemoveRange(userPurchases);
-        //        context.SaveChanges();
+                _context.Purchases.RemoveRange(userPurchases);
+                await _context.SaveChangesAsync();
 
-        //        return Ok($"Все покупки пользователя (всего {userPurchases.Count}) успешно удалены");
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        return StatusCode(500, "Произошла ошибка при удалении покупок пользователя");
-        //    }
-        //}
+                return Ok($"Все покупки пользователя (всего {userPurchases.Count}) успешно удалены");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Ошибка при удалении покупок пользователя {UserId}", userId);
+                return StatusCode(500, "Произошла ошибка при удалении покупок пользователя");
+            }
+        }
 
-        /// <summary>
-        /// Получить покупки по статусу ключа
-        /// </summary>
-        /// <param name="keyStatus">Статус ключа (active, used, revoked)</param>
-        /// <returns>Список покупок с указанным статусом ключа</returns>
         [ApiExplorerSettings(GroupName = "v1")]
         [HttpGet("GetPurchasesByKeyStatus/{keyStatus}")]
         [ProducesResponseType(typeof(List<Purchase>), 200)]
         [ProducesResponseType(400)]
         [ProducesResponseType(500)]
-        public ActionResult GetPurchasesByKeyStatus(string keyStatus)
+        public async Task<ActionResult> GetPurchasesByKeyStatus(string keyStatus)
         {
             try
             {
                 if (!new[] { "active", "used", "revoked" }.Contains(keyStatus))
                     return BadRequest("Неверный статус ключа. Допустимые значения: active, used, revoked");
 
-                using var context = new GameShopContext();
-                List<Purchase> purchases = context.Purchases
+                var purchases = await _context.Purchases
                     .Where(p => p.KeyStatus == keyStatus)
-                    .ToList();
+                    .ToListAsync();
 
                 return Ok(purchases);
             }
             catch (Exception ex)
             {
+                _logger.LogError(ex, "Ошибка при получении списка покупок по статусу {KeyStatus}", keyStatus);
                 return StatusCode(500, "Ошибка при получении списка покупок");
             }
         }
 
-        /// <summary>
-        /// Генерация уникального ключа активации
-        /// </summary>
-        /// <returns>Сгенерированный ключ активации</returns>
         private string GenerateActivationKey()
         {
-            Random random = new Random();
+            var random = new Random();
             const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-
             return new string(Enumerable.Repeat(chars, 16)
                 .Select(s => s[random.Next(s.Length)]).ToArray());
         }
