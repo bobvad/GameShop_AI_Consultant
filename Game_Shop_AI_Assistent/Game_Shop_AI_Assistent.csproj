@@ -8,7 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="EPPlus" Version="8.5.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="EPPlus" Version="8.5.1" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc" Version="2.3.0" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="5.0.17">
       <PrivateAssets>all</PrivateAssets>

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Game_Shop_AI_Assistent.Modell;
+using Microsoft.EntityFrameworkCore;
 
 namespace GameShop.Context
 {
@@ -9,6 +10,7 @@ namespace GameShop.Context
         }
         public GameShopContext() : base()
         {
+            Database.EnsureCreated();
         }
 
         public DbSet<Users> Users { get; set; }
@@ -19,6 +21,7 @@ namespace GameShop.Context
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<Cart> Carts { get; set; }
+        public DbSet<GameKeys> GameKeys { get; set; }
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (!optionsBuilder.IsConfigured)

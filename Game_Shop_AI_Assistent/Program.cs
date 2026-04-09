@@ -1,28 +1,36 @@
-using Microsoft.OpenApi.Models;
+п»їusing Microsoft.OpenApi.Models;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore; 
-using GameShop.Context;             
+using Microsoft.EntityFrameworkCore;
+using GameShop.Context;
 using Game_Shop_AI_Assistent.GigaChat_LLM;
 using Game_Shop_AI_Assistent.Services;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<GameShopContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        new MySqlServerVersion(new Version(8, 1, 0)) 
+        new MySqlServerVersion(new Version(8, 1, 0)),
+        mysqlOptions => mysqlOptions
+            .EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(30),
+                errorNumbersToAdd: null
+            )
+            .CommandTimeout(60)
     )
 );
 
 builder.Services.AddScoped<GigaChatService>();
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-
 builder.Services.AddLogging();
-
 builder.Services.AddRazorPages();
-builder.Services.AddScoped<IEmailService, EmailService>();
+
+// CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowAll", policy =>
@@ -33,35 +41,56 @@ builder.Services.AddCors(options =>
     });
 });
 
+// РќР°СЃС‚СЂРѕР№РєР° Р»РёРјРёС‚РѕРІ РґР»СЏ Р·Р°РіСЂСѓР·РєРё С„Р°Р№Р»РѕРІ
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.MultipartBodyLengthLimit = 8 * 1024 * 1024; // 8 MB
+    options.ValueLengthLimit = 8 * 1024 * 1024;
+});
+
+// Swagger РєРѕРЅС„РёРіСѓСЂР°С†РёСЏ
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Version = "v1",
-        Title = "Руководство для использования запросов",
-        Description = "Полное руководство для использования запросов находящихся в проекте"
+        Title = "Р СѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ",
+        Description = "РџРѕР»РЅРѕРµ СЂСѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ РЅР°С…РѕРґСЏС‰РёС…СЃСЏ РІ РїСЂРѕРµРєС‚Рµ"
     });
     c.SwaggerDoc("v2", new OpenApiInfo
     {
         Version = "v2",
-        Title = "Руководство для использования запросов",
-        Description = "Полное руководство для использования запросов находящихся в проекте"
+        Title = "Р СѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ",
+        Description = "РџРѕР»РЅРѕРµ СЂСѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ РЅР°С…РѕРґСЏС‰РёС…СЃСЏ РІ РїСЂРѕРµРєС‚Рµ"
     });
     c.SwaggerDoc("v3", new OpenApiInfo
     {
         Version = "v3",
-        Title = "Руководство для использования запросов",
-        Description = "Полное руководство для использования запросов находящихся в проекте"
+        Title = "Р СѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ",
+        Description = "РџРѕР»РЅРѕРµ СЂСѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ РЅР°С…РѕРґСЏС‰РёС…СЃСЏ РІ РїСЂРѕРµРєС‚Рµ"
     });
     c.SwaggerDoc("v4", new OpenApiInfo
     {
         Version = "v4",
-        Title = "Руководство для использования запросов",
-        Description = "Полное руководство для использования запросов находящихся в проекте"
+        Title = "Р СѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ",
+        Description = "РџРѕР»РЅРѕРµ СЂСѓРєРѕРІРѕРґСЃС‚РІРѕ РґР»СЏ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёСЏ Р·Р°РїСЂРѕСЃРѕРІ РЅР°С…РѕРґСЏС‰РёС…СЃСЏ РІ РїСЂРѕРµРєС‚Рµ"
     });
 
+    // рџ”§ Р’РђР–РќРћ: РњР°РїРїРёРЅРі IFormFile РґР»СЏ Swagger
+    c.MapType<IFormFile>(() => new OpenApiSchema
+    {
+        Type = "string",
+        Format = "binary",
+        Description = "Р¤Р°Р№Р» РґР»СЏ Р·Р°РіСЂСѓР·РєРё"
+    });
+
+    // рџ”§ Р‘Р•Р—РћРџРђРЎРќРћ: РџСЂРѕРІРµСЂРєР° СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёСЏ XML С„Р°Р№Р»Р° РїРµСЂРµРґ РїРѕРґРєР»СЋС‡РµРЅРёРµРј
     var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
-    c.IncludeXmlComments(Path.Combine(AppContext.BaseDirectory, xmlFilename));
+    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
+    if (File.Exists(xmlPath))
+    {
+        c.IncludeXmlComments(xmlPath);
+    }
 });
 
 var app = builder.Build();
@@ -75,10 +104,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI(c =>
     {
-        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Запросы GET");
-        c.SwaggerEndpoint("/swagger/v2/swagger.json", "Запросы POST");
-        c.SwaggerEndpoint("/swagger/v3/swagger.json", "Запросы PUT");
-        c.SwaggerEndpoint("/swagger/v4/swagger.json", "Запросы DELETE");
+        c.SwaggerEndpoint("/swagger/v1/swagger.json", "Р—Р°РїСЂРѕСЃС‹ GET");
+        c.SwaggerEndpoint("/swagger/v2/swagger.json", "Р—Р°РїСЂРѕСЃС‹ POST");
+        c.SwaggerEndpoint("/swagger/v3/swagger.json", "Р—Р°РїСЂРѕСЃС‹ PUT");
+        c.SwaggerEndpoint("/swagger/v4/swagger.json", "Р—Р°РїСЂРѕСЃС‹ DELETE");
     });
 }
 else
@@ -88,12 +117,9 @@ else
 }
 
 app.UseHttpsRedirection();
-app.UseStaticFiles();
-
+app.UseStaticFiles(); // вњ… Р”Р»СЏ СЂР°Р·РґР°С‡Рё Р·Р°РіСЂСѓР¶РµРЅРЅС‹С… РёР·РѕР±СЂР°Р¶РµРЅРёР№
 app.UseRouting();
-
 app.UseCors("AllowAll");
-
 app.UseAuthorization();
 
 app.MapRazorPages();

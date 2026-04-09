@@ -1,5 +1,6 @@
 ﻿using GameShop.Context;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
@@ -25,21 +26,61 @@ namespace Game_Shop_AI_Assistent.Controllers
         ///<response code="500">При выполнении запроса на стороне сервера возникли ошибки</response>
         [Route("SingIn")]
         [HttpPost]
-        [ProducesResponseType(typeof(Users), 200)]
-        [ProducesResponseType(403)]
-        [ProducesResponseType(500)]
         public ActionResult SingIn([FromForm] string Login, [FromForm] string Password)
         {
-            if (Login == null && Password == null)
-                return StatusCode(403);
+            if (string.IsNullOrWhiteSpace(Login) || string.IsNullOrWhiteSpace(Password))
+                return StatusCode(403, "Логин и пароль обязательны");
+
             try
             {
-                Users user = new GameShopContext().Users.Where(x => x.Login == Login && x.Password == Password).First();
+                using var context = new GameShopContext();
+
+                var user = context.Users
+                    .FirstOrDefault(x => x.Login == Login && x.Password == Password);
+
+                if (user == null)
+                    return StatusCode(403, "Неверный логин или пароль");
+
                 return Json(user);
             }
             catch (Exception ex)
             {
-                return StatusCode(500);
+                Console.WriteLine($"SingIn error: {ex.Message}");
+                return StatusCode(500, "Ошибка сервера");
+            }
+        }
+        /// <summary>
+        /// Получение статистики пользователя
+        /// </summary>
+        [Route("GetStats")]
+        [HttpGet]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(404)]
+        public ActionResult GetStats([FromQuery] int id)
+        {
+            try
+            {
+                using var context = new GameShopContext();
+
+                var user = context.Users
+                    .Include(u => u.Purchases)
+                    .FirstOrDefault(u => u.Id == id);
+
+                if (user == null)
+                    return NotFound("Пользователь не найден");
+
+                var stats = new
+                {
+                    gamesCount = user.Purchases?.Count ?? 0,
+                    ordersCount = user.Purchases?.Count ?? 0
+                };
+
+                return Json(stats);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"GetStats error: {ex.Message}");
+                return StatusCode(500, "Ошибка сервера");
             }
         }
         /// <summary>

@@ -4,6 +4,7 @@ using Game_Shop_AI_Assistent.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Game_Shop_AI_Assistent.Modell;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {

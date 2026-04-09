@@ -11,13 +11,11 @@ namespace Game_Shop_AI_Assistent.GigaChat_LLM
     /// </summary>
     public class GigaChatService
     {
-        // 🔐 Ключи аутентификации (в продакшене — вынести в appsettings.json!)
         private static string ClientId = "0199d470-bb93-7ce2-b0df-620ead27395d";
         private static string AuthorizationKey = "MDE5OWQ0NzAtYmI5My03Y2UyLWIwZGYtNjIwZWFkMjczOTVkOjQwNjdkNDdhLWY1MTYtNGZiYS05ZGM5LTg0MDAwNDExNTUwNQ==";
         private static string? Token = null;
         private static DateTime TokenExpirationTime;
 
-        // Кэширование времени последних рекомендаций (не спамить пользователя)
         private static readonly Dictionary<int, DateTime> _lastRecommendations = new();
 
         private readonly GameShopContext _context;
@@ -32,7 +30,6 @@ namespace Game_Shop_AI_Assistent.GigaChat_LLM
 
 ВАЖНО: 
 - Все рекомендации должны быть РЕАЛЬНЫМИ существующими играми
-- Указывай платформу (PC, PS5, Xbox, Switch, Mobile), если это уместно
 - Учитывай жанровые предпочтения пользователя
 
 Для каждой рекомендации указывай:
@@ -474,7 +471,7 @@ namespace Game_Shop_AI_Assistent.GigaChat_LLM
     {
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
-        public string Type { get; set; } = string.Empty; // "welcome", "personalized"
+        public string Type { get; set; } = string.Empty; 
         public bool ShowOnLogin { get; set; }
         public int Priority { get; set; } = 1;
     }

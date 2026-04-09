@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
 
 using System.ComponentModel.DataAnnotations;
+using Game_Shop_AI_Assistent.Modell;
 
 /// <summary>
 /// Пользователь системы
