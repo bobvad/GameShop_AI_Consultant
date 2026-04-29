@@ -310,7 +310,31 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, new { message = $"Ошибка: {ex.Message}" });
             }
         }
+        [HttpGet("GetUserPurchases/{userId}")]
+        public async Task<ActionResult> GetUserPurchases(int userId)
+        {
+            var purchases = await _context.Purchases
+                .Where(p => p.UserId == userId)
+                .Include(p => p.Game)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.GameId,
+                    GameName = p.Game.Title,
+                    p.PurchaseDate,
+                    p.KeyStatus,
+                    p.ActivationKey,
+                    Platform = p.Game.Platform,
+                    ImageUrl = p.Game.ImageUrl,
+                    Price = p.Game.Price
+                })
+                .ToListAsync();
 
+            if (purchases.Count == 0)
+                return NotFound("Покупки не найдены");
+
+            return Ok(purchases);
+        }
         /// <summary>
         /// Удалить все игры из базы данных
         /// </summary>

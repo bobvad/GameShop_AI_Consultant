@@ -1,16 +1,17 @@
 ﻿using Game_Shop_AI_Assistent.Modell;
 using Microsoft.EntityFrameworkCore;
-
+using Microsoft.EntityFrameworkCore.InMemory;
 namespace GameShop.Context
 {
     public class GameShopContext : DbContext
     {
-        public GameShopContext(DbContextOptions<GameShopContext> options) : base(options)
-        {
-        }
         public GameShopContext() : base()
         {
             Database.EnsureCreated();
+        }
+
+        public GameShopContext(DbContextOptions<GameShopContext> options) : base(options)
+        {
         }
 
         public DbSet<Users> Users { get; set; }
@@ -21,7 +22,7 @@ namespace GameShop.Context
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<Message> Messages { get; set; }
         public DbSet<Cart> Carts { get; set; }
-        public DbSet<GameKeys> GameKeys { get; set; }
+
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
             if (!optionsBuilder.IsConfigured)
@@ -44,6 +45,8 @@ namespace GameShop.Context
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            // Здесь ваши конфигурации моделей
         }
     }
 }

@@ -1,5 +1,4 @@
-﻿// Services/EmailService.cs
-using System.Net;
+﻿using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Configuration;
 
@@ -21,6 +20,8 @@ namespace Game_Shop_AI_Assistent.Services
             _logger = logger;
         }
 
+        // Services/EmailService.cs — улучшенная версия с логами
+
         public async Task<bool> SendActivationKeyAsync(string toEmail, string gameName, string activationKey)
         {
             try
@@ -30,9 +31,12 @@ namespace Game_Shop_AI_Assistent.Services
                 var senderEmail = _config["Email:SenderEmail"];
                 var appPassword = _config["Email:AppPassword"];
 
+                _logger.LogInformation("SMTP: {Server}:{Port}, From: {From}, To: {To}",
+                    smtpServer, smtpPort, senderEmail, toEmail);
+
                 using var smtpClient = new SmtpClient(smtpServer, smtpPort)
                 {
-                    EnableSsl = true,             
+                    EnableSsl = true,
                     UseDefaultCredentials = false,
                     Credentials = new NetworkCredential(senderEmail, appPassword),
                     Timeout = 60000,
@@ -53,16 +57,17 @@ namespace Game_Shop_AI_Assistent.Services
                 };
 
                 await smtpClient.SendMailAsync(mailMessage);
+                _logger.LogInformation("✅ Письмо успешно отправлено на {Email}", toEmail);
                 return true;
             }
             catch (SmtpException ex)
             {
-                Console.WriteLine($"SMTP Error: {ex.StatusCode} - {ex.Message}");
+                _logger.LogError(ex, "❌ SMTP ошибка: {StatusCode} — {Message}", ex.StatusCode, ex.Message);
                 return false;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка: {ex.Message}\n{ex.StackTrace}");
+                _logger.LogError(ex, "❌ Общая ошибка отправки: {Message}", ex.Message);
                 return false;
             }
         }

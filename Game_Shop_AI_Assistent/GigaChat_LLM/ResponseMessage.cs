@@ -1,4 +1,6 @@
-﻿namespace Game_Shop_AI_Assistent.GigaChat_LLM
+﻿using Game_Shop_AI_Assistent.GigaChat_LLM.Models;
+
+namespace Game_Shop_AI_Assistent.GigaChat_LLM
 {
     public class ResponseMessage
     {
@@ -18,7 +20,7 @@
         {
             public string finish_reason { get; set; }
             public int index { get; set; }
-            public GigaChat_LLM.Models.Request.Message message { get; set; }
+            public Request.Message message { get; set; }
         }
     }
 }

@@ -15,6 +15,13 @@ namespace Game_Shop_AI_Assistent.Controllers
     /// </remarks>
     public class UsersController : Controller
     {
+        private GameShopContext gameShopContext;
+
+        public UsersController(GameShopContext gameShopContext)
+        {
+            this.gameShopContext = gameShopContext;
+        }
+
         /// <summary>
         /// Авторизация пользователя
         /// </summary> 

@@ -5,6 +5,7 @@ using GameShop.Context;
 using Game_Shop_AI_Assistent.GigaChat_LLM;
 using Game_Shop_AI_Assistent.Services;
 using Microsoft.AspNetCore.Http.Features;
+using Game_Shop_AI_Assistent.GigaChat_LLM.API_UP_02.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
