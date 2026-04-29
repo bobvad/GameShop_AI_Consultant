@@ -5,240 +5,120 @@ using Microsoft.EntityFrameworkCore;
 namespace Game_Shop_AI_Assistent.Controllers
 {
     [Route("api/[controller]")]
-    [ApiExplorerSettings(GroupName = "v1")]
+
     [ApiController]
-    public class CartsController : Controller
+    public class CartsController : ControllerBase
     {
+        private readonly GameShopContext _context;
+
+        public CartsController(GameShopContext context)
+        {
+            _context = context;
+        }
+
+
         [HttpPost("AddToCart")]
-        [ProducesResponseType(typeof(Cart), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(409)]
-        [ProducesResponseType(500)]
-        public ActionResult AddToCart([FromForm] int userId, [FromForm] int gameId, [FromForm] int quantity = 1)
+        public async Task<IActionResult> AddToCart([FromForm] int userId, [FromForm] int gameId, [FromForm] int quantity = 1)
         {
-            try
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+                return BadRequest("Пользователь не найден");
+
+            var game = await _context.Games.FindAsync(gameId);
+            if (game == null)
+                return BadRequest("Игра не найдена");
+
+            var existing = await _context.Carts
+                .FirstOrDefaultAsync(c => c.UserId == userId && c.GameId == gameId);
+
+            if (existing != null)
             {
-                using var context = new GameShopContext();
-
-                Console.WriteLine($"Поиск пользователя {userId}...");
-                var user = context.Users.Find(userId);
-                if (user == null)
-                {
-                    Console.WriteLine($" Пользователь {userId} не найден");
-                    return BadRequest("Пользователь не найден");
-                }
-                Console.WriteLine($" Пользователь найден: {user.Login}");
-
-                Console.WriteLine($" Поиск игры {gameId}...");
-                var game = context.Games.Find(gameId);
-                if (game == null)
-                {
-                    Console.WriteLine($" Игра {gameId} не найдена");
-                    return BadRequest("Игра не найдена");
-                }
-                Console.WriteLine($" Игра найдена: {game.Title}");
-
-                Console.WriteLine($" Проверка существующей записи в корзине...");
-                var existingCartItem = context.Carts
-                    .FirstOrDefault(c => c.UserId == userId && c.GameId == gameId);
-
-                if (existingCartItem != null)
-                {
-                    Console.WriteLine($" Обновление существующей записи...");
-                    existingCartItem.Quantity += quantity;
-                    context.SaveChanges();
-                    Console.WriteLine($" Запись обновлена");
-                    return Ok(existingCartItem);
-                }
-
-                Console.WriteLine($" Создание новой записи...");
-                Cart cartItem = new Cart
-                {
-                    UserId = userId,
-                    GameId = gameId,
-                    Quantity = quantity
-                };
-
-                Console.WriteLine($"Добавление в контекст...");
-                context.Carts.Add(cartItem);
-
-                Console.WriteLine($" Сохранение изменений...");
-                context.SaveChanges();
-
-                Console.WriteLine($" Создана запись с ID: {cartItem.Id}");
-                return Ok(cartItem);
+                existing.Quantity += quantity;
+                await _context.SaveChangesAsync();
+                return Ok(existing);
             }
-            catch (DbUpdateException dbEx)
+
+            var cartItem = new Cart
             {
-                Console.WriteLine($"  ERROR: {dbEx.Message}");
-                Console.WriteLine($" EXCEPTION: {dbEx.InnerException?.Message}");
-                Console.WriteLine($"  TYPE: {dbEx.InnerException?.GetType()}");
+                UserId = userId,
+                GameId = gameId,
+                Quantity = quantity
+            };
 
-                if (dbEx.InnerException != null)
-                {
-                    Console.WriteLine($" FULL INNER: {dbEx.InnerException}");
-                }
+            _context.Carts.Add(cartItem);
+            await _context.SaveChangesAsync();
 
-                return StatusCode(500, $"Ошибка базы данных: {dbEx.InnerException?.Message ?? dbEx.Message}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"  ERROR: {ex.Message}");
-                Console.WriteLine($" {ex.StackTrace}");
-                Console.WriteLine($" ERROR: {ex}");
-                return StatusCode(500, $"Произошла ошибка: {ex.Message}");
-            }
-        }
-        /// <summary>
-        /// Обновить количество товара в корзине
-        /// </summary>
-        [HttpPut("UpdateQuantity")]
-        [ProducesResponseType(typeof(Cart), 200)]
-        [ProducesResponseType(400)]
-        [ProducesResponseType(404)]
-        [ProducesResponseType(500)]
-        public ActionResult UpdateQuantity([FromForm] int cartId, [FromForm] int quantity)
-        {
-            try
-            {
-                using var context = new GameShopContext();
-
-                var cartItem = context.Carts.Find(cartId);
-                if (cartItem == null)
-                {
-                    return NotFound("Запись в корзине не найдена");
-                }
-
-                if (quantity <= 0)
-                {
-                   
-                    return BadRequest("Количество должно быть больше 0");
-                }
-
-                cartItem.Quantity = quantity;
-                context.SaveChanges();
-
-                return Ok(cartItem);
-            }
-            catch (DbUpdateException dbEx)
-            {
-               return StatusCode(500, $"Ошибка базы данных: {dbEx.InnerException?.Message ?? dbEx.Message}");
-            }
-            catch (Exception ex)
-            {
-               return StatusCode(500, $"Произошла ошибка: {ex.Message}");
-            }
-        }
-        /// <summary>
-        /// Удалить игру из корзины по ID записи корзины
-        /// </summary>
-        [HttpDelete("RemoveFromCart/{cartId}")]
-        [ApiExplorerSettings(GroupName = "v1")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(404)]
-        [ProducesResponseType(500)]
-        public ActionResult RemoveFromCart(int cartId)
-        {
-            try
-            {
-                using var context = new GameShopContext();
-
-                var cartItem = context.Carts.Find(cartId);
-                if (cartItem == null)
-                    return NotFound("Запись в корзине не найдена");
-
-                context.Carts.Remove(cartItem);
-                context.SaveChanges();
-
-                return Ok("Игра удалена из корзины");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка в RemoveFromCart: {ex.Message}");
-                return StatusCode(500, $"Произошла ошибка при удалении из корзины: {ex.Message}");
-            }
+            return Ok(cartItem);
         }
 
-        /// <summary>
-        /// Очистить всю корзину пользователя
-        /// </summary>
-        [HttpDelete("ClearCart/{userId}")]
-        [ApiExplorerSettings(GroupName = "v1")]
-        [ProducesResponseType(200)]
-        [ProducesResponseType(500)]
-        public ActionResult ClearCart(int userId)
-        {
-            try
-            {
-                using var context = new GameShopContext();
-
-                var cartItems = context.Carts.Where(c => c.UserId == userId).ToList();
-
-                if (cartItems.Any())
-                {
-                    context.Carts.RemoveRange(cartItems);
-                    context.SaveChanges();
-                    return Ok("Корзина очищена");
-                }
-
-                return Ok("Корзина уже пуста");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Ошибка в ClearCart: {ex.Message}");
-                return StatusCode(500, $"Произошла ошибка при очистке корзины: {ex.Message}");
-            }
-        }
 
         [HttpGet("GetUserCart/{userId}")]
-        [ApiExplorerSettings(GroupName = "v1")]
-        [ProducesResponseType(typeof(List<Cart>), 200)]
-        [ProducesResponseType(404)]
-        [ProducesResponseType(500)]
-        public ActionResult GetUserCart(int userId)
+        public async Task<IActionResult> GetUserCart(int userId)
         {
-            try
-            {
-                using var context = new GameShopContext();
+            var cartItems = await _context.Carts
+                .Where(c => c.UserId == userId)
+                .Include(c => c.Game)
+                .ToListAsync();
 
-                var cartItems = context.Carts
-                    .Where(c => c.UserId == userId)
-                    .Include(c => c.Game)
-                    .ToList();
-
-                if (cartItems.Count == 0)
-                    return NotFound("Корзина пуста");
-
-                return Ok(cartItems);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при получении корзины: {ex.Message}");
-            }
+            return Ok(cartItems); 
         }
-        /// <summary>
-        /// Получить количество игр в корзине пользователя
-        /// </summary>
-        [HttpGet("GetCartItemsCount/{userId}")]
-        [ApiExplorerSettings(GroupName = "v1")]
-        [ProducesResponseType(typeof(int), 200)]
-        [ProducesResponseType(500)]
-        public ActionResult GetCartItemsCount(int userId)
+
+
+        [HttpPut("UpdateQuantity")]
+        public async Task<IActionResult> UpdateQuantity([FromForm] int cartId, [FromForm] int quantity)
         {
-            try
-            {
-                using var context = new GameShopContext();
+            var item = await _context.Carts.FindAsync(cartId);
 
-                var totalItems = context.Carts
-                    .Where(c => c.UserId == userId)
-                    .Sum(c => c.Quantity);
+            if (item == null)
+                return NotFound();
 
-                return Ok(totalItems);
-            }
-            catch (Exception ex)
-            {
-                return StatusCode(500, $"Ошибка при получении количества товаров в корзине: {ex.Message}");
-            }
+            if (quantity <= 0)
+                return BadRequest("Количество должно быть > 0");
+
+            item.Quantity = quantity;
+            await _context.SaveChangesAsync();
+
+            return Ok(item);
+        }
+
+
+        [HttpDelete("RemoveFromCart/{cartId}")]
+        public async Task<IActionResult> RemoveFromCart(int cartId)
+        {
+            var item = await _context.Carts.FindAsync(cartId);
+
+            if (item == null)
+                return NotFound();
+
+            _context.Carts.Remove(item);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+
+        [HttpDelete("ClearCart/{userId}")]
+        public async Task<IActionResult> ClearCart(int userId)
+        {
+            var items = await _context.Carts
+                .Where(c => c.UserId == userId)
+                .ToListAsync();
+
+            _context.Carts.RemoveRange(items);
+            await _context.SaveChangesAsync();
+
+            return Ok();
+        }
+
+
+        [HttpGet("GetCartItemsCount/{userId}")]
+        public async Task<IActionResult> GetCartItemsCount(int userId)
+        {
+            var count = await _context.Carts
+                .Where(c => c.UserId == userId)
+                .SumAsync(c => c.Quantity);
+
+            return Ok(count);
         }
     }
 }

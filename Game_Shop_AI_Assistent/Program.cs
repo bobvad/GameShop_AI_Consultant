@@ -42,14 +42,12 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Настройка лимитов для загрузки файлов
 builder.Services.Configure<FormOptions>(options =>
 {
-    options.MultipartBodyLengthLimit = 8 * 1024 * 1024; // 8 MB
+    options.MultipartBodyLengthLimit = 8 * 1024 * 1024;
     options.ValueLengthLimit = 8 * 1024 * 1024;
 });
 
-// Swagger конфигурация
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
@@ -77,7 +75,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Полное руководство для использования запросов находящихся в проекте"
     });
 
-    // 🔧 ВАЖНО: Маппинг IFormFile для Swagger
     c.MapType<IFormFile>(() => new OpenApiSchema
     {
         Type = "string",
@@ -85,7 +82,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "Файл для загрузки"
     });
 
-    // 🔧 БЕЗОПАСНО: Проверка существования XML файла перед подключением
     var xmlFilename = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFilename);
     if (File.Exists(xmlPath))
@@ -116,9 +112,12 @@ else
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
-
+app.UseCors(policy =>
+    policy.AllowAnyOrigin()
+          .AllowAnyMethod()
+          .AllowAnyHeader());
 app.UseHttpsRedirection();
-app.UseStaticFiles(); // ✅ Для раздачи загруженных изображений
+app.UseStaticFiles(); 
 app.UseRouting();
 app.UseCors("AllowAll");
 app.UseAuthorization();

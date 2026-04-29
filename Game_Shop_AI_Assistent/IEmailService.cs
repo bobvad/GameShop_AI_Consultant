@@ -20,8 +20,6 @@ namespace Game_Shop_AI_Assistent.Services
             _logger = logger;
         }
 
-        // Services/EmailService.cs — улучшенная версия с логами
-
         public async Task<bool> SendActivationKeyAsync(string toEmail, string gameName, string activationKey)
         {
             try
@@ -31,43 +29,36 @@ namespace Game_Shop_AI_Assistent.Services
                 var senderEmail = _config["Email:SenderEmail"];
                 var appPassword = _config["Email:AppPassword"];
 
-                _logger.LogInformation("SMTP: {Server}:{Port}, From: {From}, To: {To}",
-                    smtpServer, smtpPort, senderEmail, toEmail);
-
                 using var smtpClient = new SmtpClient(smtpServer, smtpPort)
                 {
                     EnableSsl = true,
                     UseDefaultCredentials = false,
-                    Credentials = new NetworkCredential(senderEmail, appPassword),
-                    Timeout = 60000,
-                    DeliveryMethod = SmtpDeliveryMethod.Network
+                    Credentials = new NetworkCredential(senderEmail, appPassword)
                 };
 
-                var subject = $"GameStore: Ключ активации для {gameName}";
-                var body = $@"Здравствуйте!
+                var subject = $"GameStore — Ключ для {gameName}";
 
-Игра: {gameName}
-Ваш ключ активации: {activationKey}
-
-С уважением, команда GameStore";
+                var body = $@"
+                    <h2>Спасибо за покупку</h2>
+                    <p><b>Игра:</b> {gameName}</p>
+                    <p><b>Ваш ключ активации:</b></p>
+                    <h1 style='color:#4CAF50'>{activationKey}</h1>
+                    <p>С уважением,<br/>GameStore</p>
+                ";
 
                 using var mailMessage = new MailMessage(senderEmail, toEmail, subject, body)
                 {
-                    IsBodyHtml = false
+                    IsBodyHtml = true
                 };
 
                 await smtpClient.SendMailAsync(mailMessage);
-                _logger.LogInformation("✅ Письмо успешно отправлено на {Email}", toEmail);
+
+                _logger.LogInformation("Письмо отправлено на {Email}", toEmail);
                 return true;
-            }
-            catch (SmtpException ex)
-            {
-                _logger.LogError(ex, "❌ SMTP ошибка: {StatusCode} — {Message}", ex.StatusCode, ex.Message);
-                return false;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "❌ Общая ошибка отправки: {Message}", ex.Message);
+                _logger.LogError(ex, "Ошибка отправки email");
                 return false;
             }
         }
