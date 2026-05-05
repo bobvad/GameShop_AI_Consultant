@@ -47,7 +47,7 @@ builder.Services.Configure<FormOptions>(options =>
     options.MultipartBodyLengthLimit = 8 * 1024 * 1024;
     options.ValueLengthLimit = 8 * 1024 * 1024;
 });
-
+builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
