@@ -36,7 +36,7 @@ namespace Game_Shop_AI_Assistent.Controllers
         public ActionResult SingIn([FromForm] string Login, [FromForm] string Password)
         {
             if (string.IsNullOrWhiteSpace(Login) || string.IsNullOrWhiteSpace(Password))
-                return StatusCode(403, new { message = "Логин и пароль обязательны" });
+                return StatusCode(403, "Логин и пароль обязательны");
 
             try
             {
@@ -46,22 +46,14 @@ namespace Game_Shop_AI_Assistent.Controllers
                     .FirstOrDefault(x => x.Login == Login && x.Password == Password);
 
                 if (user == null)
-                    return StatusCode(403, new { message = "Неверный логин или пароль" });
+                    return StatusCode(403, "Неверный логин или пароль");
 
-                return Ok(new
-                {
-                    id = user.Id,
-                    login = user.Login,
-                    email = user.Email,
-                    role = user.Role ?? "user",
-                    isGuest = user.IsGuest,
-                    dateTimeCreated = user.DateTimeCreated
-                });
+                return Json(user);
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"SingIn error: {ex.Message}");
-                return StatusCode(500, new { message = "Ошибка сервера" });
+                return StatusCode(500, "Ошибка сервера");
             }
         }
         /// <summary>
