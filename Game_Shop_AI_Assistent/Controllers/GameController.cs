@@ -310,6 +310,24 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, new { message = $"Ошибка: {ex.Message}" });
             }
         }
+        [HttpGet("GetNewGames")]
+        public async Task<ActionResult> GetNewGames()
+        {
+            try
+            {
+                var games = await _context.Games
+                    .Where(g => g.ReleaseDate != DateTime.MinValue)
+                    .OrderByDescending(g => g.ReleaseDate)
+                    .Take(10)
+                    .ToListAsync();
+
+                return Ok(games);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { message = ex.Message });
+            }
+        }
         [HttpGet("GetUserPurchases/{userId}")]
         public async Task<ActionResult> GetUserPurchases(int userId)
         {
@@ -335,6 +353,7 @@ namespace Game_Shop_AI_Assistent.Controllers
 
             return Ok(purchases);
         }
+
         /// <summary>
         /// Удалить все игры из базы данных
         /// </summary>

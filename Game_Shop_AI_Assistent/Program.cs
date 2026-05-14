@@ -2,7 +2,6 @@
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using GameShop.Context;
-using Game_Shop_AI_Assistent.GigaChat_LLM;
 using Game_Shop_AI_Assistent.Services;
 using Microsoft.AspNetCore.Http.Features;
 using Game_Shop_AI_Assistent.GigaChat_LLM.API_UP_02.Services;
@@ -11,15 +10,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<GameShopContext>(options =>
     options.UseMySql(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        new MySqlServerVersion(new Version(8, 1, 0)),
-        mysqlOptions => mysqlOptions
-            .EnableRetryOnFailure(
-                maxRetryCount: 5,
-                maxRetryDelay: TimeSpan.FromSeconds(30),
-                errorNumbersToAdd: null
-            )
-            .CommandTimeout(60)
+        builder.Configuration.GetConnectionString("GameShop"),
+        ServerVersion.AutoDetect(
+            builder.Configuration.GetConnectionString("GameShop")
+        )
     )
 );
 

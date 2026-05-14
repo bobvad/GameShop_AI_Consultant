@@ -34,7 +34,10 @@ public class Cart
     /// <summary>
     /// Количество товара
     /// </summary>
-    public int Quantity { get; set; } = 1; 
+    public int Quantity { get; set; } = 1;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
     /// <summary>
     /// Вычисляемая стоимость
     /// </summary>

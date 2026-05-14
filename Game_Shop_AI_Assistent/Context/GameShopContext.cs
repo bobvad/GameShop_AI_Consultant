@@ -18,6 +18,7 @@ namespace GameShop.Context
         public DbSet<Game> Games { get; set; }
         public DbSet<Genre> Genres { get; set; }
         public DbSet<GameGenre> GameGenres { get; set; }
+        public DbSet<GameKeys> GameKeys { get; set; }
         public DbSet<Review> Reviews { get; set; }
         public DbSet<Purchase> Purchases { get; set; }
         public DbSet<Message> Messages { get; set; }
@@ -45,8 +46,6 @@ namespace GameShop.Context
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-
-            // Здесь ваши конфигурации моделей
         }
     }
 }

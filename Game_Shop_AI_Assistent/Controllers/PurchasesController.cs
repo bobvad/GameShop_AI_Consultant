@@ -3,8 +3,6 @@ using Game_Shop_AI_Assistent.Modell;
 using Game_Shop_AI_Assistent.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Cryptography;
-using System.Text;
 
 namespace Game_Shop_AI_Assistent.Controllers
 {
@@ -14,39 +12,11 @@ namespace Game_Shop_AI_Assistent.Controllers
     {
         private readonly GameShopContext _context;
         private readonly IEmailService _emailService;
-        private readonly ILogger<PurchasesController> _logger;
 
-        public PurchasesController(
-            GameShopContext context,
-            IEmailService emailService,
-            ILogger<PurchasesController> logger)
+        public PurchasesController(GameShopContext context, IEmailService emailService)
         {
             _context = context;
             _emailService = emailService;
-            _logger = logger;
-        }
-
-        public static class KeyGenerator
-        {
-            public static string GenerateKey()
-            {
-                const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-                var result = new StringBuilder();
-
-                for (int block = 0; block < 4; block++)
-                {
-                    if (block > 0)
-                        result.Append("-");
-
-                    for (int i = 0; i < 4; i++)
-                    {
-                        var index = RandomNumberGenerator.GetInt32(chars.Length);
-                        result.Append(chars[index]);
-                    }
-                }
-
-                return result.ToString();
-            }
         }
 
         [HttpPost("BuyGame")]
@@ -54,73 +24,154 @@ namespace Game_Shop_AI_Assistent.Controllers
         {
             try
             {
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
                 if (user == null)
-                    return BadRequest("User not found");
+                    return BadRequest(new { success = false, message = "Пользователь не найден" });
 
                 if (string.IsNullOrWhiteSpace(user.Email))
-                    return BadRequest("Email missing");
+                    return BadRequest(new { success = false, message = "У пользователя не указан email" });
 
-                var game = await _context.Games.FindAsync(gameId);
+                var game = await _context.Games.FirstOrDefaultAsync(g => g.Id == gameId);
                 if (game == null)
-                    return BadRequest("Game not found");
+                    return BadRequest(new { success = false, message = "Игра не найдена" });
 
-                var existing = await _context.Purchases
+                var existingPurchase = await _context.Purchases
                     .FirstOrDefaultAsync(p => p.UserId == userId && p.GameId == gameId);
 
-                string key;
-
-                if (existing != null)
+                if (existingPurchase != null)
                 {
-                    key = existing.ActivationKey;
-                }
-                else
-                {
-                    key = KeyGenerator.GenerateKey();
-
-                    var purchase = new Purchase
-                    {
-                        UserId = userId,
-                        GameId = gameId,
-                        ActivationKey = key,
-                        PurchaseDate = DateTime.UtcNow,
-                        KeyStatus = "active"
-                    };
-
-                    _context.Purchases.Add(purchase);
-                    await _context.SaveChangesAsync();
+                    return BadRequest(new { success = false, message = "Вы уже приобрели эту игру" });
                 }
 
-                var emailSent = await _emailService.SendActivationKeyAsync(
+                var gameKey = await _context.GameKeys
+                    .FirstOrDefaultAsync(k => k.GameId == gameId && !k.IsUsed);
+
+                if (gameKey == null)
+                {
+                    return BadRequest(new { success = false, message = "Нет доступных ключей для этой игры" });
+                }
+
+                gameKey.IsUsed = true;
+                gameKey.UsedByUserId = userId;
+                gameKey.UsedAt = DateTime.UtcNow;
+
+                var purchase = new Purchase
+                {
+                    UserId = userId,
+                    GameId = gameId,
+                    ActivationKey = gameKey.Key,
+                    PurchaseDate = DateTime.UtcNow,
+                    KeyStatus = "active"
+                };
+
+                _context.Purchases.Add(purchase);
+                await _context.SaveChangesAsync();
+
+                bool emailSent = await _emailService.SendActivationKeyAsync(
                     user.Email,
+                    user.Login ?? user.Email,
                     game.Title,
-                    key
+                    gameKey.Key,
+                    game.Platform ?? "Steam"
                 );
 
                 return Ok(new
                 {
                     success = true,
-                    message = emailSent ? "Success, email sent" : "Success, email failed",
-                    key
+                    message = emailSent ? "Покупка успешна! Ключ отправлен на почту." : "Покупка успешна! Но не удалось отправить email.",
+                    key = gameKey.Key,
+                    emailSent = emailSent,
+                    gameTitle = game.Title,
+                    email = user.Email
                 });
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Purchase error");
-                return StatusCode(500, "Server error");
+                return StatusCode(500, new { success = false, message = $"Ошибка: {ex.Message}" });
             }
         }
 
-        [HttpGet("TestEmail")]
-        public async Task<IActionResult> TestEmail()
+        [HttpPost("TestEmail")]
+        public async Task<IActionResult> TestEmail([FromForm] string testEmail, [FromForm] string testGameName = "Тестовая игра")
         {
-            var result = await _emailService.SendActivationKeyAsync(
-                "test@gmail.com",
-                "Test Game",
-                "ABCD-EFGH-IJKL-MNOP"
-            );
+            try
+            {
+                if (string.IsNullOrWhiteSpace(testEmail))
+                    return BadRequest(new { success = false, message = "Укажите email для теста" });
 
-            return Ok(result);
+                string testKey = "TEST-" + Guid.NewGuid().ToString().ToUpper().Substring(0, 24);
+
+                bool result = await _emailService.SendActivationKeyAsync(
+                    testEmail,
+                    "Тестовый пользователь",
+                    testGameName,
+                    testKey,
+                    "Steam"
+                );
+
+                return Ok(new
+                {
+                    success = result,
+                    message = result ? $"Письмо отправлено на {testEmail}" : "Ошибка отправки",
+                    email = testEmail,
+                    key = testKey
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("GetAvailableKeys/{gameId}")]
+        public async Task<IActionResult> GetAvailableKeys(int gameId)
+        {
+            try
+            {
+                int available = await _context.GameKeys.CountAsync(k => k.GameId == gameId && !k.IsUsed);
+                int total = await _context.GameKeys.CountAsync(k => k.GameId == gameId);
+
+                return Ok(new
+                {
+                    gameId,
+                    availableKeys = available,
+                    totalKeys = total,
+                    hasKeys = available > 0
+                });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpGet("GetUserPurchases/{userId}")]
+        public async Task<IActionResult> GetUserPurchases(int userId)
+        {
+            try
+            {
+                var purchases = await _context.Purchases
+                    .Where(p => p.UserId == userId)
+                    .Include(p => p.Game)
+                    .Select(p => new
+                    {
+                        p.Id,
+                        p.GameId,
+                        GameName = p.Game != null ? p.Game.Title : "Неизвестная игра",
+                        p.PurchaseDate,
+                        p.KeyStatus,
+                        p.ActivationKey,
+                        Platform = p.Game != null ? p.Game.Platform : "Unknown"
+                    })
+                    .OrderByDescending(p => p.PurchaseDate)
+                    .ToListAsync();
+
+                return Ok(purchases);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { success = false, message = ex.Message });
+            }
         }
     }
 }
