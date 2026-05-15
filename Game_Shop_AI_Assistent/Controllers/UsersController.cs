@@ -57,6 +57,40 @@ namespace Game_Shop_AI_Assistent.Controllers
             }
         }
         /// <summary>
+        /// Получение пользователя по ID
+        /// </summary>
+        [Route("GetUser/{id}")]
+        [HttpGet]
+        [ProducesResponseType(200)]
+        [ProducesResponseType(404)]
+        public ActionResult GetUser(int id)
+        {
+            try
+            {
+                using var context = new GameShopContext();
+
+                var user = context.Users
+                    .FirstOrDefault(u => u.Id == id);
+
+                if (user == null)
+                    return NotFound(new { message = "Пользователь не найден" });
+
+                return Json(new
+                {
+                    id = user.Id,
+                    login = user.Login,
+                    email = user.Email,
+                    role = user.Role,
+                    dateTimeCreated = user.DateTimeCreated
+                });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"GetUser error: {ex.Message}");
+                return StatusCode(500, new { message = "Ошибка сервера" });
+            }
+        }
+        /// <summary>
         /// Получение статистики пользователя
         /// </summary>
         [Route("GetStats")]

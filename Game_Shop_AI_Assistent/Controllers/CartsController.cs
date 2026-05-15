@@ -19,35 +19,38 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// Добавить игру в корзину пользователя
         /// </summary>
         [HttpPost("AddToCart")]
-        public async Task<IActionResult> AddToCart([FromForm] int userId, [FromForm] int gameId, [FromForm] int quantity = 1)
+        public async Task<IActionResult> AddToCart([FromBody] AddToCartRequest request)
         {
             try
             {
+                if (request == null || request.UserId <= 0 || request.GameId <= 0)
+                    return BadRequest(new { success = false, message = "Неверные параметры запроса" });
+
                 // Проверяем существование пользователя
-                var user = await _context.Users.FindAsync(userId);
+                var user = await _context.Users.FindAsync(request.UserId);
                 if (user == null)
                     return NotFound(new { success = false, message = "Пользователь не найден" });
 
                 // Проверяем существование игры
-                var game = await _context.Games.FindAsync(gameId);
+                var game = await _context.Games.FindAsync(request.GameId);
                 if (game == null)
                     return NotFound(new { success = false, message = "Игра не найдена" });
 
                 // Проверяем, не купил ли пользователь уже эту игру
                 var existingPurchase = await _context.Purchases
-                    .FirstOrDefaultAsync(p => p.UserId == userId && p.GameId == gameId);
+                    .FirstOrDefaultAsync(p => p.UserId == request.UserId && p.GameId == request.GameId);
 
                 if (existingPurchase != null)
                     return BadRequest(new { success = false, message = "Вы уже приобрели эту игру" });
 
                 // Ищем существующий товар в корзине
                 var existingItem = await _context.Carts
-                    .FirstOrDefaultAsync(c => c.UserId == userId && c.GameId == gameId);
+                    .FirstOrDefaultAsync(c => c.UserId == request.UserId && c.GameId == request.GameId);
 
                 if (existingItem != null)
                 {
                     // Увеличиваем количество
-                    existingItem.Quantity += quantity;
+                    existingItem.Quantity += request.Quantity;
                     existingItem.UpdatedAt = DateTime.UtcNow;
                     await _context.SaveChangesAsync();
 
@@ -62,7 +65,8 @@ namespace Game_Shop_AI_Assistent.Controllers
                             existingItem.GameId,
                             existingItem.Quantity,
                             gameTitle = game.Title,
-                            gamePrice = game.Price
+                            gamePrice = game.Price,
+                            totalPrice = game.Price * existingItem.Quantity
                         }
                     });
                 }
@@ -70,9 +74,9 @@ namespace Game_Shop_AI_Assistent.Controllers
                 // Создаем новый элемент корзины
                 var cartItem = new Cart
                 {
-                    UserId = userId,
-                    GameId = gameId,
-                    Quantity = quantity,
+                    UserId = request.UserId,
+                    GameId = request.GameId,
+                    Quantity = request.Quantity,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
@@ -91,7 +95,8 @@ namespace Game_Shop_AI_Assistent.Controllers
                         cartItem.GameId,
                         cartItem.Quantity,
                         gameTitle = game.Title,
-                        gamePrice = game.Price
+                        gamePrice = game.Price,
+                        totalPrice = game.Price * cartItem.Quantity
                     }
                 });
             }
@@ -133,7 +138,7 @@ namespace Game_Shop_AI_Assistent.Controllers
                             c.Game.Developer,
                             c.Game.Platform,
                             c.Game.ImageUrl,
-                            c.Game.GameGenres
+                            c.Game.ReleaseDate
                         },
                         totalPrice = c.Game.Price * c.Quantity
                     })
@@ -163,21 +168,21 @@ namespace Game_Shop_AI_Assistent.Controllers
         /// Обновить количество товара в корзине
         /// </summary>
         [HttpPut("UpdateQuantity")]
-        public async Task<IActionResult> UpdateQuantity([FromForm] int cartId, [FromForm] int quantity)
+        public async Task<IActionResult> UpdateQuantity([FromBody] UpdateQuantityRequest request)
         {
             try
             {
+                if (request == null || request.CartId <= 0 || request.Quantity <= 0)
+                    return BadRequest(new { success = false, message = "Неверные параметры запроса" });
+
                 var item = await _context.Carts
                     .Include(c => c.Game)
-                    .FirstOrDefaultAsync(c => c.Id == cartId);
+                    .FirstOrDefaultAsync(c => c.Id == request.CartId);
 
                 if (item == null)
                     return NotFound(new { success = false, message = "Товар в корзине не найден" });
 
-                if (quantity <= 0)
-                    return BadRequest(new { success = false, message = "Количество должно быть больше 0" });
-
-                item.Quantity = quantity;
+                item.Quantity = request.Quantity;
                 item.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
 
@@ -192,7 +197,8 @@ namespace Game_Shop_AI_Assistent.Controllers
                         item.GameId,
                         item.Quantity,
                         gameTitle = item.Game?.Title,
-                        totalPrice = (item.Game?.Price ?? 0) * quantity
+                        gamePrice = item.Game?.Price ?? 0,
+                        totalPrice = (item.Game?.Price ?? 0) * request.Quantity
                     }
                 });
             }
@@ -314,5 +320,18 @@ namespace Game_Shop_AI_Assistent.Controllers
                 return StatusCode(500, new { success = false, message = $"Ошибка: {ex.Message}" });
             }
         }
+    }
+
+    public class AddToCartRequest
+    {
+        public int UserId { get; set; }
+        public int GameId { get; set; }
+        public int Quantity { get; set; } = 1;
+    }
+
+    public class UpdateQuantityRequest
+    {
+        public int CartId { get; set; }
+        public int Quantity { get; set; }
     }
 }
